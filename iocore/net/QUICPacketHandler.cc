@@ -124,6 +124,7 @@ QUICPacketHandlerIn::init_accept(EThread *t = nullptr)
 void
 QUICPacketHandlerIn::_recv_packet(int event, UDPPacket *udp_packet)
 {
+  EThread *eth;
   IOBufferBlock *block = udp_packet->getIOBlockChain();
 
   QUICConnectionId cid;
@@ -157,25 +158,37 @@ QUICPacketHandlerIn::_recv_packet(int event, UDPPacket *udp_packet)
       return;
     }
 
+    eth = eventProcessor.assign_thread(ET_NET);
+
     // Create a new NetVConnection
     vc = static_cast<QUICNetVConnection *>(getNetProcessor()->allocate_vc(nullptr));
-    vc->init(cid, udp_packet->getConnection(), this);
+    NET_SUM_GLOBAL_DYN_STAT(net_connections_currently_open_stat, 1);
     vc->id = net_next_connection_number();
     vc->con.move(con);
     vc->submit_time = Thread::get_hrtime();
-    vc->mutex       = this->mutex;
+    vc->thread      = eth;
+    vc->mutex       = new_ProxyMutex();
     vc->action_     = *this->action_;
     vc->set_is_transparent(this->opt.f_inbound_transparent);
     vc->set_context(NET_VCONNECTION_IN);
-    vc->read.triggered = 1;
-    vc->start(this->_ssl_ctx);
     vc->options.ip_proto  = NetVCOptions::USE_UDP;
     vc->options.ip_family = udp_packet->from.sa.sa_family;
 
+    vc->init(cid, udp_packet->getConnection(), this);
+    vc->start(vc->_packet_handler->_ssl_ctx);
+
+    // Hack for NetHandler
+    vc->read.enabled = 1;
     this->_connections.put(cid, vc);
-    this->action_->continuation->handleEvent(NET_EVENT_ACCEPT, vc);
+  } else {
+    eth = vc->thread;
   }
 
+  // Push the packet into QUICPollCont
+  udp_packet->data.ptr = vc;
+  get_QUICPollCont(eth)->inQueue.push(udp_packet);
+
+/*
   if (vc->is_closed()) {
     this->_connections.put(vc->connection_id(), nullptr);
     // FIXME QUICNetVConnection is NOT freed to prevent crashes. #2674
@@ -185,6 +198,7 @@ QUICPacketHandlerIn::_recv_packet(int event, UDPPacket *udp_packet)
     vc->push_packet(udp_packet);
     eventProcessor.schedule_imm(vc, ET_CALL, QUIC_EVENT_PACKET_READ_READY, nullptr);
   }
+*/
 }
 
 // TODO: Should be called via eventProcessor?
