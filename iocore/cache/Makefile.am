@@ -127,7 +127,8 @@ check_PROGRAMS = \
   test_Alternate_L_to_S_remove_L \
   test_Alternate_L_to_S_remove_S \
   test_Alternate_S_to_L_remove_S \
-  test_Alternate_S_to_L_remove_L
+  test_Alternate_S_to_L_remove_L \
+  test_Alternate_S_to_S_remove_S_write_S
 
 test_main_SOURCES = \
   ./test/main.cc \
@@ -189,6 +190,13 @@ test_Alternate_S_to_L_remove_L_LDADD = $(test_LDADD)
 test_Alternate_S_to_L_remove_L_SOURCES = \
   $(test_main_SOURCES) \
   ./test/test_Alternate_S_to_L_remove_L.cc
+
+test_Alternate_S_to_S_remove_S_write_S_CPPFLAGS = $(test_CPPFLAGS)
+test_Alternate_S_to_S_remove_S_write_S_LDFLAGS = @AM_LDFLAGS@
+test_Alternate_S_to_S_remove_S_write_S_LDADD = $(test_LDADD)
+test_Alternate_S_to_S_remove_S_write_S_SOURCES = \
+  $(test_main_SOURCES) \
+  ./test/test_Alternate_S_to_S_remove_S_write_S.cc
 
 include $(top_srcdir)/build/tidy.mk
 
