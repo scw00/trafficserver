@@ -80,6 +80,9 @@ public:
     /// Socket transmit buffer size.
     /// 0 => OS default.
     int send_bufsize;
+    /// Socket reuse port.
+    /// 0 => no.
+    int reuse_port = 0;
     /// Socket options for @c sockopt.
     /// 0 => do not set options.
     uint32_t sockopt_flags;

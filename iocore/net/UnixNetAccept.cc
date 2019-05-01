@@ -153,7 +153,8 @@ NetAccept::init_accept_loop()
   int i, n;
   char thr_name[MAX_THREAD_NAME_LENGTH];
   size_t stacksize;
-  if (do_listen(BLOCKING))
+  this->non_blocking = false;
+  if (do_listen(this->non_blocking))
     return;
   REC_ReadConfigInteger(stacksize, "proxy.config.thread.default.stacksize");
   SET_CONTINUATION_HANDLER(this, &NetAccept::acceptLoopEvent);
@@ -166,6 +167,10 @@ NetAccept::init_accept_loop()
 
   for (i = 0; i < n; i++) {
     NetAccept *a = (i < n - 1) ? clone() : this;
+    if (a == nullptr) {
+      Error("clone net accept failed: %d, %d", i, ats_ip_port_host_order(&server.accept_addr));
+      return;
+    }
     snprintf(thr_name, MAX_THREAD_NAME_LENGTH, "[ACCEPT %d:%d]", i, ats_ip_port_host_order(&server.accept_addr));
     eventProcessor.spawn_thread(a, thr_name, stacksize);
     Debug("iocore_net_accept_start", "Created accept thread #%d for port %d", i + 1, ats_ip_port_host_order(&server.accept_addr));
@@ -221,7 +226,11 @@ NetAccept::init_accept_per_thread()
   n      = eventProcessor.thread_group[opt.etype]._count;
 
   for (i = 0; i < n; i++) {
-    NetAccept *a       = (i < n - 1) ? clone() : this;
+    NetAccept *a = (i < n - 1) ? clone() : this;
+    if (a == nullptr) {
+      Error("clone net accept failed: %d %d", i, ats_ip_port_host_order(&server.accept_addr));
+      return;
+    }
     EThread *t         = eventProcessor.thread_group[opt.etype]._thread[i];
     PollDescriptor *pd = get_PollDescriptor(t);
 
@@ -553,12 +562,24 @@ NetAccept::cancel()
   server.close();
 }
 
+int
+NetAccept::rebind_listen_socket()
+{
+  server.fd = NO_FD;
+  return this->do_listen(this->non_blocking);
+}
+
 NetAccept *
 NetAccept::clone() const
 {
   NetAccept *na;
   na  = new NetAccept(opt);
   *na = *this;
+  if (opt.reuse_port && na->rebind_listen_socket()) {
+    delete na;
+    return nullptr;
+  }
+
   return na;
 }
 

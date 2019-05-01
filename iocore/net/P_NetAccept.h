@@ -86,6 +86,7 @@ struct NetAccept : public Continuation {
   AcceptFunctionPtr accept_fn = nullptr;
   int ifd                     = NO_FD;
   int id                      = -1;
+  bool non_blocking           = true;
   Ptr<NetAcceptAction> action_;
   SSLNextProtocolAccept *snpa = nullptr;
   EventIO ep;
@@ -100,6 +101,7 @@ struct NetAccept : public Continuation {
   void init_accept_per_thread();
   virtual void stop_accept();
   virtual NetAccept *clone() const;
+  virtual int rebind_listen_socket();
 
   // 0 == success
   int do_listen(bool non_blocking);
