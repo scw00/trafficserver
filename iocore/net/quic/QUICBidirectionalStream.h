@@ -24,19 +24,14 @@
 #pragma once
 
 #include "QUICStream.h"
+#include "QUICUnidirectionalStream.h"
 
-class QUICBidirectionalStream : public QUICStreamVConnection, public QUICTransferProgressProvider
+class QUICBidirectionalStream : public QUICStreamVConnection
 {
 public:
   QUICBidirectionalStream(QUICRTTProvider *rtt_provider, QUICConnectionInfoProvider *cinfo, QUICStreamId sid,
                           uint64_t recv_max_stream_data, uint64_t send_max_stream_data);
-  QUICBidirectionalStream()
-    : QUICStreamVConnection(),
-      _remote_flow_controller(0, 0),
-      _local_flow_controller(nullptr, 0, 0),
-      _state(nullptr, nullptr, nullptr, nullptr)
-  {
-  }
+  QUICBidirectionalStream() : QUICStreamVConnection() {}
 
   ~QUICBidirectionalStream() {}
 
@@ -64,12 +59,6 @@ public:
   void stop_sending(QUICStreamErrorUPtr error) override;
   void reset(QUICStreamErrorUPtr error) override;
 
-  // QUICTransferProgressProvider
-  bool is_transfer_goal_set() const override;
-  uint64_t transfer_progress() const override;
-  uint64_t transfer_goal() const override;
-  bool is_cancelled() const override;
-
   /*
    * QUICApplication need to call one of these functions when it process VC_EVENT_*
    */
@@ -80,28 +69,9 @@ public:
   QUICOffset largest_offset_sent() const override;
 
 private:
-  QUICStreamErrorUPtr _reset_reason        = nullptr;
-  bool _is_reset_sent                      = false;
-  QUICStreamErrorUPtr _stop_sending_reason = nullptr;
-  bool _is_stop_sending_sent               = false;
-
-  bool _is_transfer_complete = false;
-  bool _is_reset_complete    = false;
-
-  QUICTransferProgressProviderVIO _progress_vio = {this->_write_vio};
-
-  QUICRemoteStreamFlowController _remote_flow_controller;
-  QUICLocalStreamFlowController _local_flow_controller;
-  uint64_t _flow_control_buffer_size = 1024;
-
-  // Fragments of received STREAM frame (offset is unmatched)
-  // TODO: Consider to replace with ts/RbTree.h or other data structure
-  QUICIncomingStreamFrameBuffer _received_stream_frame_buffer;
-
   // FIXME Unidirectional streams should use either ReceiveStreamState or SendStreamState
-  QUICBidirectionalStreamStateMachine _state;
+  // QUICBidirectionalStreamStateMachine _state;
 
-  // QUICFrameGenerator
-  void _on_frame_acked(QUICFrameInformationUPtr &info) override;
-  void _on_frame_lost(QUICFrameInformationUPtr &info) override;
+  QUICSendStream _send_stream;
+  QUICReceiveStream _recv_stream;
 };

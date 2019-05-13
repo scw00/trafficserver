@@ -143,30 +143,8 @@ public:
   void update(const QUICSendStreamState opposite_side);
 };
 
-class QUICBidirectionalStreamStateMachine : public QUICStreamStateMachine<QUICBidirectionalStreamState>
+class QUICBidirectionalStreamStateMachine
 {
 public:
-  QUICBidirectionalStreamStateMachine(QUICTransferProgressProvider *send_in, QUICTransferProgressProvider *send_out,
-                                      QUICTransferProgressProvider *recv_in, QUICTransferProgressProvider *recv_out)
-    : _send_stream_state(send_in, send_out), _recv_stream_state(recv_in, recv_out)
-  {
-    this->_recv_stream_state.update(this->_send_stream_state.get());
-  };
-
-  QUICBidirectionalStreamState get() const override;
-
-  void update_with_sending_frame(const QUICFrame &frame) override;
-  void update_with_receiving_frame(const QUICFrame &frame) override;
-  void update_on_ack();
-  void update_on_read();
-  void update_on_eos();
-
-  bool is_allowed_to_send(QUICFrameType type) const override;
-  bool is_allowed_to_send(const QUICFrame &frame) const override;
-  bool is_allowed_to_receive(QUICFrameType type) const override;
-  bool is_allowed_to_receive(const QUICFrame &frame) const override;
-
-private:
-  QUICSendStreamStateMachine _send_stream_state;
-  QUICReceiveStreamStateMachine _recv_stream_state;
+  static QUICBidirectionalStreamState get(QUICSendStreamState s_state, QUICReceiveStreamState r_state);
 };
