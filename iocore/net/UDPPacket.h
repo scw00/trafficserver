@@ -33,10 +33,15 @@ class UDP2Connection;
 struct UDP2Packet {
   UDP2Packet() = default;
   UDP2Packet(const IpEndpoint &from, const IpEndpoint &to, Ptr<IOBufferBlock> &chain) : from(from), to(to), chain(chain) {}
-  UDP2Packet(sockaddr const *from, sockaddr *to, Ptr<IOBufferBlock> &chain) : chain(chain)
+  UDP2Packet(sockaddr const *from, sockaddr const *to, Ptr<IOBufferBlock> &chain) : chain(chain)
   {
-    ats_ip_copy(&this->from, from);
-    ats_ip_copy(&this->to, to);
+    if (from) {
+      ats_ip_copy(&this->from, from);
+    }
+
+    if (to) {
+      ats_ip_copy(&this->to, to);
+    }
   }
 
   ~UDP2Packet() { this->chain = nullptr; }
