@@ -25,6 +25,7 @@
 
 #include "I_UDPPacket.h"
 #include "tscore/List.h"
+#include "UDPPacket.h"
 
 #include "QUICPacket.h"
 
@@ -37,12 +38,14 @@ public:
   QUICPacketReceiveQueue(QUICPacketFactory &packet_factory, QUICPacketHeaderProtector &ph_protector);
 
   void enqueue(UDPPacket *packet);
+  void enqueue(UDP2PacketUPtr packet);
   QUICPacketUPtr dequeue(uint8_t *packet_buf, QUICPacketCreationResult &result);
   uint32_t size();
   void reset();
 
 private:
-  CountQueue<UDPPacket> _queue;
+  std::deque<UDP2PacketUPtr> _queue;
+  // CountQueue<UDPPacket> _queue;
   QUICPacketFactory &_packet_factory;
   QUICPacketHeaderProtector &_ph_protector;
   QUICPacketNumber _largest_received_packet_number = 0;

@@ -68,6 +68,8 @@
 #include "quic/QUICContext.h"
 #include "quic/QUICTokenCreator.h"
 
+#include "UDPPacket.h"
+
 // Size of connection ids for debug log : e.g. aaaaaaaa-bbbbbbbb\0
 static constexpr size_t MAX_CIDS_SIZE = 8 + 1 + 8 + 1;
 
@@ -82,6 +84,8 @@ static constexpr size_t MAX_CIDS_SIZE = 8 + 1 + 8 + 1;
 class QUICPacketHandler;
 class QUICLossDetector;
 class QUICHandshake;
+class QUICPacketAcceptor;
+class UDP2ConnectionImpl;
 
 class SSLNextProtocolSet;
 
@@ -144,6 +148,8 @@ public:
             QUICResetTokenTable *rtable);
   void init(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid, UDPConnection *,
             QUICPacketHandler *, QUICResetTokenTable *rtable, QUICConnectionTable *ctable);
+  void init(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid, QUICPacketAcceptor *accept,
+            UDP2ConnectionImpl *, QUICResetTokenTable *rtable);
 
   // accept new conn_id
   int acceptEvent(int event, Event *e);
@@ -186,6 +192,7 @@ public:
   void close_quic_connection(QUICConnectionErrorUPtr error) override;
   void reset_quic_connection() override;
   void handle_received_packet(UDPPacket *packet) override;
+  void handle_received_packet(UDP2PacketUPtr packet);
   void ping() override;
 
   // QUICConnection (QUICConnectionInfoProvider)
@@ -363,6 +370,9 @@ private:
   QUICAddrVerifyState _verified_state;
 
   std::unique_ptr<QUICContextImpl> _context;
+
+  QUICPacketAcceptor *_packet_acceptor = nullptr;
+  UDP2ConnectionImpl *_udp2_con        = nullptr;
 };
 
 typedef int (QUICNetVConnection::*QUICNetVConnHandler)(int, void *);

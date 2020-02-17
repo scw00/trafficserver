@@ -186,12 +186,15 @@ QUICNetProcessor::main_accept(Continuation *cont, SOCKET fd, AcceptOptions const
   Debug("iocore_net_processor", "NetProcessor::main_accept - port %d,recv_bufsize %d, send_bufsize %d, sockopt 0x%0x",
         opt.local_port, opt.recv_bufsize, opt.send_bufsize, opt.sockopt_flags);
 
+  if (this->_action = nullptr) {
+    this->_action  = new NetAcceptAction();
+    *this->_action = cont;
+  }
+
   ProxyMutex *mutex  = this_ethread()->mutex.get();
   int accept_threads = opt.accept_threads; // might be changed.
   IpEndpoint accept_ip;                    // local binding address.
   // char thr_name[MAX_THREAD_NAME_LENGTH];
-
-  NetAccept *na = createNetAccept(opt);
 
   if (accept_threads < 0) {
     REC_ReadConfigInteger(accept_threads, "proxy.config.accept_threads");
@@ -208,17 +211,74 @@ QUICNetProcessor::main_accept(Continuation *cont, SOCKET fd, AcceptOptions const
   ink_assert(0 < opt.local_port && opt.local_port < 65536);
   accept_ip.port() = htons(opt.local_port);
 
-  na->accept_fn = net_accept;
-  na->server.fd = fd;
-  ats_ip_copy(&na->server.accept_addr, &accept_ip);
+  // na->accept_fn = net_accept;
+  // na->server.fd = fd;
+  // ats_ip_copy(&na->server.accept_addr, &accept_ip);
 
-  na->action_         = new NetAcceptAction();
-  *na->action_        = cont;
-  na->action_->server = &na->server;
-  na->init_accept();
+  this->_action  = new NetAcceptAction();
+  *this->_action = cont;
+  // na->action_->server = &na->server;
+  // na->init_accept();
 
-  SCOPED_MUTEX_LOCK(lock, na->mutex, this_ethread());
-  udpNet.UDPBind((Continuation *)na, &na->server.accept_addr.sa, fd, 1048576, 1048576);
+  // SCOPED_MUTEX_LOCK(lock, na->mutex, this_ethread());
+  // udpNet.UDPBind((Continuation *)na, &na->server.accept_addr.sa, 1048576, 1048576);
 
-  return na->action_.get();
+  auto dispatcher = std::make_unique<QUICPacketDispatcher>(accept_ip, fd);
+  this->_dispatchers.emplace(accept_ip.host_order_port(), std::move(dispatcher));
+  return this->_action.get();
+}
+
+void
+QUICNetProcessor::send(UDP2PacketUPtr p)
+{
+  auto it = this->_dispatchers.find(p->from.host_order_port());
+  if (it == this->_dispatchers.end()) {
+    Debug("quic_processor", "unknown local addresss ignore");
+    return;
+  }
+
+  it->second->send_udp_packet(std::move(p));
+  p.release();
+  return;
+}
+
+void
+QUICNetProcessor::send(QUICPacketUPtr p, const IpEndpoint &to)
+{
+  auto it = this->_dispatchers.find(to.host_order_port());
+  if (it == this->_dispatchers.end()) {
+    Debug("quic_processor", "unknown local addresss ignore");
+    return;
+  }
+>>>>>>> QUIC: compile success
+
+  it->second->send_quic_packet(std::move(p), to);
+  p.release();
+  return;
+}
+
+void
+QUICNetProcessor::dispatch(UDP2PacketUPtr p, QUICConnectionId dcid)
+{
+  uint64_t hash = dcid.hash() << 32;
+  this->_acceptors[hash % this->_acceptors.size()]->dispatch(std::move(p));
+}
+
+QUICPacketAcceptor *
+QUICNetProcessor::create_acceptor(EThread *t)
+{
+  this->_acceptors.push_back(std::make_unique<QUICPacketAcceptor>(t, this->_acceptors.size() - 1));
+  return this->_acceptors.back().get();
+}
+
+Continuation *
+QUICNetProcessor::get_action() const
+{
+  return this->_action->continuation;
+}
+
+void
+initialize_thread_for_quic_net(EThread *thread)
+{
+  thread->schedule_every(quic_NetProcessor.create_acceptor(thread), -HRTIME_MSECONDS(UDP_PERIOD));
 }

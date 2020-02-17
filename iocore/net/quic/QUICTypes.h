@@ -227,6 +227,14 @@ using QUICStreamErrorUPtr     = std::unique_ptr<QUICStreamError>;
 class QUICConnectionId
 {
 public:
+  struct Hash {
+    size_t
+    operator()(QUICConnectionId const &id) const noexcept
+    {
+      return id.hash();
+    }
+  };
+
   static uint8_t SCID_LEN;
 
   static constexpr int MIN_LENGTH_FOR_INITIAL = 8;
@@ -238,7 +246,7 @@ public:
 
   explicit operator bool() const { return true; }
   /**
-   * Note that this returns a kind of hash code so we can use a ConnectionId as a key for a hashtable.
+   * Note that this returns last 8 bytes as hash code so we can use a ConnectionId as a key for a hashtable.
    */
   operator uint64_t() const { return this->_hashcode(); }
   operator const uint8_t *() const { return this->_id; }
@@ -260,6 +268,11 @@ public:
     return memcmp(this->_id, x._id, this->_len) != 0;
   }
 
+  // plus operation only support last 2 bytes +operations. It is equal to
+  //   uint16_t a = this->_id[last 2 bytes] + nums;
+  //   this->_id[last 2 bytes] = a
+  QUICConnectionId operator+(const int16_t num);
+
   /*
    * This is just for debugging.
    */
@@ -269,6 +282,11 @@ public:
   uint8_t length() const;
   bool is_zero() const;
   void randomize();
+  uint64_t
+  hash() const
+  {
+    return this->_hashcode();
+  }
 
 private:
   uint64_t _hashcode() const;

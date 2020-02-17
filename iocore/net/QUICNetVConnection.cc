@@ -252,6 +252,30 @@ QUICNetVConnection::init(QUICConnectionId peer_cid, QUICConnectionId original_ci
   }
 }
 
+void
+QUICNetVConnection::init(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
+                         QUICPacketAcceptor *accept, UDP2ConnectionImpl *con)
+{
+  SET_HANDLER((NetVConnHandler)&QUICNetVConnection::acceptEvent);
+  this->_udp2_con                    = con;
+  this->_packet_acceptor             = accept;
+  this->_peer_quic_connection_id     = peer_cid;
+  this->_original_quic_connection_id = original_cid;
+  this->_first_quic_connection_id    = first_cid;
+  this->_quic_connection_id.randomize();
+
+  this->_update_cids();
+
+  if (is_debug_tag_set(QUIC_DEBUG_TAG.data())) {
+    char dcid_hex_str[QUICConnectionId::MAX_HEX_STR_LENGTH];
+    char scid_hex_str[QUICConnectionId::MAX_HEX_STR_LENGTH];
+    this->_peer_quic_connection_id.hex(dcid_hex_str, QUICConnectionId::MAX_HEX_STR_LENGTH);
+    this->_quic_connection_id.hex(scid_hex_str, QUICConnectionId::MAX_HEX_STR_LENGTH);
+
+    QUICConDebug("dcid=%s scid=%s", dcid_hex_str, scid_hex_str);
+  }
+}
+
 // Initialize QUICNetVC for in coming connection (NET_VCONNECTION_IN)
 void
 QUICNetVConnection::init(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
@@ -1476,7 +1500,10 @@ QUICNetVConnection::_state_common_send_packet()
     }
 
     if (written) {
-      this->_packet_handler->send_packet(this, udp_payload);
+      auto packet   = std::make_unique<UDP2Packet>();
+      packet->chain = udp_payload;
+      this->_udp2_con->send(std::move(packet));
+      // this->_packet_handler->send_packet(this, udp_payload);
     } else {
       udp_payload->dealloc();
       break;
@@ -2327,4 +2354,10 @@ QUICNetVConnection::_handle_periodic_ack_event()
     // FIXME: should sent depend on socket event.
     this->_schedule_packet_write_ready();
   }
+}
+
+void
+QUICNetVConnection::handle_received_packet(UDP2PacketUPtr p)
+{
+  this->_packet_recv_queue.enqueue(std::move(p));
 }

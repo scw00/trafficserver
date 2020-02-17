@@ -41,31 +41,37 @@ QUICPacketReceiveQueue::QUICPacketReceiveQueue(QUICPacketFactory &packet_factory
 void
 QUICPacketReceiveQueue::enqueue(UDPPacket *packet)
 {
-  this->_queue.enqueue(packet);
+  // this->_queue.enqueue(packet);
+}
+
+void
+QUICPacketReceiveQueue::enqueue(UDP2PacketUPtr packet)
+{
+  this->_queue.push_back(std::move(packet));
 }
 
 QUICPacketUPtr
 QUICPacketReceiveQueue::dequeue(uint8_t *packet_buf, QUICPacketCreationResult &result)
 {
   QUICPacketUPtr quic_packet = QUICPacketFactory::create_null_packet();
-  UDPPacket *udp_packet      = nullptr;
+  UDP2PacketUPtr udp_packet;
 
   // FIXME: avoid this copy
   // Copy payload of UDP packet to this->_payload once
   if (!this->_payload) {
-    udp_packet = this->_queue.dequeue();
-    if (!udp_packet) {
+    if (this->_queue.empty()) {
       result = QUICPacketCreationResult::NO_PACKET;
       return quic_packet;
     }
 
+    udp_packet = std::move(this->_queue.front());
+    this->_queue.pop_front();
     // Create a QUIC packet
-    this->_udp_con     = udp_packet->getConnection();
     this->_from        = udp_packet->from;
     this->_to          = udp_packet->to;
-    this->_payload_len = udp_packet->getPktLength();
+    this->_payload_len = udp_packet->chain->read_avail();
     this->_payload     = ats_unique_malloc(this->_payload_len);
-    IOBufferBlock *b   = udp_packet->getIOBlockChain();
+    IOBufferBlock *b   = udp_packet->chain.get();
     size_t written     = 0;
     while (b) {
       memcpy(this->_payload.get() + written, b->start(), b->read_avail());
@@ -132,7 +138,7 @@ QUICPacketReceiveQueue::dequeue(uint8_t *packet_buf, QUICPacketCreationResult &r
     }
   } else {
     if (!this->_packet_factory.is_ready_to_create_protected_packet() && udp_packet) {
-      this->enqueue(udp_packet);
+      this->enqueue(std::move(udp_packet));
       this->_payload.release();
       this->_payload     = nullptr;
       this->_payload_len = 0;
@@ -160,14 +166,10 @@ QUICPacketReceiveQueue::dequeue(uint8_t *packet_buf, QUICPacketCreationResult &r
     }
   }
 
-  if (udp_packet) {
-    udp_packet->free();
-  }
-
   switch (result) {
   case QUICPacketCreationResult::NOT_READY:
     // FIXME: unordered packet should be buffered and retried
-    if (this->_queue.size > 0) {
+    if (this->_queue.size() > 0) {
       result = QUICPacketCreationResult::IGNORED;
     }
 
@@ -188,7 +190,7 @@ QUICPacketReceiveQueue::dequeue(uint8_t *packet_buf, QUICPacketCreationResult &r
 uint32_t
 QUICPacketReceiveQueue::size()
 {
-  return this->_queue.size;
+  return this->_queue.size();
 }
 
 void

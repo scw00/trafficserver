@@ -158,14 +158,3 @@ QUICPollCont::pollEvent(int, Event *)
 
   return EVENT_CONT;
 }
-
-void
-initialize_thread_for_quic_net(EThread *thread)
-{
-  NetHandler *nh       = get_NetHandler(thread);
-  QUICPollCont *quicpc = get_QUICPollCont(thread);
-
-  new ((ink_dummy_for_new *)quicpc) QUICPollCont(thread->mutex, nh);
-
-  thread->schedule_every(quicpc, -HRTIME_MSECONDS(UDP_PERIOD));
-}

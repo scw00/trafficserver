@@ -37,13 +37,19 @@
  ****************************************************************************/
 #pragma once
 
+#include "UDPConnection.h"
+#include "UDPProcessor.h"
 #include "tscore/ink_platform.h"
 #include "P_Net.h"
 #include "quic/QUICConnectionTable.h"
 
+#include "QUICPacketDispatcher.h"
+#include "QUICPacketAcceptor.h"
+
 class UnixNetVConnection;
 class QUICResetTokenTable;
 struct NetAccept;
+class QUICPacketDispatcher;
 
 //////////////////////////////////////////////////////////////////
 //
@@ -64,8 +70,15 @@ public:
 
   virtual NetAccept *createNetAccept(const NetProcessor::AcceptOptions &opt) override;
   virtual NetVConnection *allocate_vc(EThread *t) override;
+  virtual QUICPacketAcceptor *create_acceptor(EThread *t);
+
+  void send(UDP2PacketUPtr p);
+  void send(QUICPacketUPtr p, const IpEndpoint &to);
+  void dispatch(UDP2PacketUPtr p, QUICConnectionId dcid);
 
   Action *main_accept(Continuation *cont, SOCKET fd, AcceptOptions const &opt) override;
+
+  Continuation *get_action() const;
 
   off_t quicPollCont_offset;
 
@@ -73,8 +86,13 @@ private:
   QUICNetProcessor(const QUICNetProcessor &);
   QUICNetProcessor &operator=(const QUICNetProcessor &);
 
+  Ptr<NetAcceptAction> _action;
+
   QUICConnectionTable *_ctable = nullptr;
   QUICResetTokenTable *_rtable = nullptr;
+
+  std::unordered_map<uint64_t, std::unique_ptr<QUICPacketDispatcher>> _dispatchers;
+  std::vector<std::unique_ptr<QUICPacketAcceptor>> _acceptors;
 };
 
 extern QUICNetProcessor quic_NetProcessor;
