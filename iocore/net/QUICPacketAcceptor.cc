@@ -10,7 +10,7 @@ static constexpr char debug_tag[] = "quic_acceptor";
 #define QUICDebugDS(dcid, scid, fmt, ...) \
   Debug(debug_tag, "[%08" PRIx32 "-%08" PRIx32 "] " fmt, dcid.h32(), scid.h32(), ##__VA_ARGS__)
 
-QUICPacketAcceptor::QUICPacketAcceptor(EThread *t, int id) : Continuation(t->mutex), _index(id), _thread(t)
+QUICPacketAcceptor::QUICPacketAcceptor(EThread *t, int id) : Continuation(t->mutex), _cid_manager(id), _thread(t)
 {
   t->schedule_every(this, -100);
   SET_HANDLER(&QUICPacketAcceptor::mainEvent);
@@ -80,9 +80,9 @@ QUICPacketAcceptor::_process_recv_udp_packet(UDP2PacketUPtr p)
   QUICLongHeaderPacketR::type(type, buf, buf_len);
 
   QUICNetVConnection *vc = nullptr;
-  auto it                = this->_qvcs.find(dcid);
-  if (it != this->_qvcs.end()) {
-    vc = it->second;
+  auto qc                = this->_cid_manager.get_route(dcid);
+  if (qc != nullptr) {
+    vc = static_cast<QUICNetVConnection *>(qc);
   }
 
   // Server Stateless Retry
@@ -203,7 +203,7 @@ QUICPacketAcceptor::_create_qvc(QUICConnectionId peer_cid, QUICConnectionId orig
   auto vc  = static_cast<QUICNetVConnection *>(quic_NetProcessor.allocate_vc(nullptr));
   auto con = this->create_udp_connection(from, to);
 
-  vc->init(peer_cid, original_cid, first_cid, this, con);
+  vc->init(peer_cid, original_cid, first_cid, this->_cid_manager, con);
   vc->id = net_next_connection_number();
   vc->con.move(c);
   vc->submit_time = Thread::get_hrtime();
@@ -213,8 +213,8 @@ QUICPacketAcceptor::_create_qvc(QUICConnectionId peer_cid, QUICConnectionId orig
   vc->set_is_transparent(false);
   vc->set_context(NET_VCONNECTION_IN);
 
-  this->_qvcs.emplace(vc->connection_id(), vc);
-  this->_qvcs.emplace(original_cid, vc);
+  this->_cid_manager.add_route(vc->connection_id(), vc);
+  this->_cid_manager.add_route(original_cid, vc);
 
   return vc;
 }
@@ -235,21 +235,4 @@ QUICPacketAcceptor::dispatch(UDP2PacketUPtr p)
 {
   this->_external_recv_list.push(p.get());
   p.release();
-}
-
-void
-QUICPacketAcceptor::add_route(const QUICConnectionId &id, QUICNetVConnection *vc)
-{
-  this->_qvcs.emplace(id, vc);
-}
-
-QUICConnectionId
-QUICPacketAcceptor::generate_cid()
-{
-  QUICConnectionId id;
-  id.randomize();
-
-  int16_t add = id.hash() % eventProcessor.thread_group[ET_NET]._count;
-  id          = id + static_cast<int16_t>(add - this->_index);
-  return id;
 }

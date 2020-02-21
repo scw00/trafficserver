@@ -254,15 +254,15 @@ QUICNetVConnection::init(QUICConnectionId peer_cid, QUICConnectionId original_ci
 
 void
 QUICNetVConnection::init(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
-                         QUICPacketAcceptor *accept, UDP2ConnectionImpl *con)
+                         QUICConnectionIdManager &manager, UDP2ConnectionImpl *con)
 {
   SET_HANDLER((NetVConnHandler)&QUICNetVConnection::acceptEvent);
   this->_udp2_con                    = con;
-  this->_packet_acceptor             = accept;
   this->_peer_quic_connection_id     = peer_cid;
   this->_original_quic_connection_id = original_cid;
   this->_first_quic_connection_id    = first_cid;
-  this->_quic_connection_id.randomize();
+  this->_cid_manager                 = &manager;
+  this->_quic_connection_id          = manager.generate_id();
 
   this->_update_cids();
 
@@ -552,8 +552,9 @@ QUICNetVConnection::destroy(EThread *t)
 void
 QUICNetVConnection::set_local_addr()
 {
-  int local_sa_size = sizeof(local_addr);
-  ATS_UNUSED_RETURN(safe_getsockname(this->_udp_con->getFd(), &local_addr.sa, &local_sa_size));
+  // int local_sa_size = sizeof(local_addr);
+  // ATS_UNUSED_RETURN(safe_getsockname(this->_udp_con->getFd(), &local_addr.sa, &local_sa_size));
+  this->local_addr = this->_udp2_con->from();
 }
 
 void
@@ -1179,9 +1180,9 @@ QUICNetVConnection::_state_handshake_process_initial_packet(const QUICInitialPac
 
     if (!this->_alt_con_manager) {
       this->_alt_con_manager =
-        new QUICAltConnectionManager(this, *this->_ctable, *this->_rtable, this->_peer_quic_connection_id,
-                                     this->_quic_config->instance_id(), this->_quic_config->active_cid_limit_in(),
-                                     this->_quic_config->preferred_address_ipv4(), this->_quic_config->preferred_address_ipv6());
+        new QUICAltConnectionManager(this, *this->_cid_manager, *this->_rtable, this->_peer_quic_connection_id, this->_quic_config->instance_id(),
+                                     this->_quic_config->active_cid_limit_in(), this->_quic_config->preferred_address_ipv4(),
+                                     this->_quic_config->preferred_address_ipv6());
       this->_frame_generators.add_generator(*this->_alt_con_manager, QUICFrameGeneratorWeight::EARLY);
       this->_frame_dispatcher->add_handler(this->_alt_con_manager);
     }
@@ -1202,8 +1203,8 @@ QUICNetVConnection::_state_handshake_process_initial_packet(const QUICInitialPac
   } else {
     if (!this->_alt_con_manager) {
       this->_alt_con_manager =
-        new QUICAltConnectionManager(this, *this->_ctable, *this->_rtable, this->_peer_quic_connection_id,
-                                     this->_quic_config->instance_id(), this->_quic_config->active_cid_limit_out());
+        new QUICAltConnectionManager(this, *this->_cid_manager, *this->_rtable, this->_peer_quic_connection_id, this->_quic_config->instance_id(),
+                                     this->_quic_config->active_cid_limit_out());
       this->_frame_generators.add_generator(*this->_alt_con_manager, QUICFrameGeneratorWeight::BEFORE_DATA);
       this->_frame_dispatcher->add_handler(this->_alt_con_manager);
     }

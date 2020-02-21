@@ -67,6 +67,7 @@
 #include "quic/QUICPacketProtectionKeyInfo.h"
 #include "quic/QUICContext.h"
 #include "quic/QUICTokenCreator.h"
+#include "quic/QUICConnectionIdManager.h"
 
 #include "UDPPacket.h"
 
@@ -148,8 +149,8 @@ public:
             QUICResetTokenTable *rtable);
   void init(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid, UDPConnection *,
             QUICPacketHandler *, QUICResetTokenTable *rtable, QUICConnectionTable *ctable);
-  void init(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid, QUICPacketAcceptor *accept,
-            UDP2ConnectionImpl *, QUICResetTokenTable *rtable);
+  void init(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
+            QUICConnectionIdManager &cid_manager, QUICResetTokenTable *rtable, UDP2ConnectionImpl *);
 
   // accept new conn_id
   int acceptEvent(int event, Event *e);
@@ -371,8 +372,8 @@ private:
 
   std::unique_ptr<QUICContextImpl> _context;
 
-  QUICPacketAcceptor *_packet_acceptor = nullptr;
-  UDP2ConnectionImpl *_udp2_con        = nullptr;
+  UDP2ConnectionImpl *_udp2_con         = nullptr;
+  QUICConnectionIdManager *_cid_manager = nullptr;
 };
 
 typedef int (QUICNetVConnection::*QUICNetVConnHandler)(int, void *);

@@ -32,11 +32,11 @@ static constexpr char V_DEBUG_TAG[] = "v_quic_alt_con";
 
 #define QUICACMVDebug(fmt, ...) Debug(V_DEBUG_TAG, "[%s] " fmt, this->_qc->cids().data(), ##__VA_ARGS__)
 
-QUICAltConnectionManager::QUICAltConnectionManager(QUICConnection *qc, QUICConnectionTable &ctable, QUICResetTokenTable &rtable,
+QUICAltConnectionManager::QUICAltConnectionManager(QUICConnection *qc, QUICConnectionIdManager &manager, QUICResetTokenTable &rtable
                                                    const QUICConnectionId &peer_initial_cid, uint32_t instance_id,
                                                    uint8_t local_active_cid_limit, const IpEndpoint *preferred_endpoint_ipv4,
                                                    const IpEndpoint *preferred_endpoint_ipv6)
-  : _qc(qc), _ctable(ctable), _rtable(rtable), _instance_id(instance_id), _local_active_cid_limit(local_active_cid_limit)
+  : _qc(qc), _cid_manager(manager), _rtabel(rtable), _instance_id(instance_id), _local_active_cid_limit(local_active_cid_limit)
 {
   // Sequence number of the initial CID is 0
   this->_alt_quic_connection_ids_remote.push_back({0, peer_initial_cid, {}, {true}});
@@ -109,13 +109,12 @@ QUICAltConnectionManager::handle_frame(QUICEncryptionLevel level, const QUICFram
 QUICAltConnectionManager::AltConnectionInfo
 QUICAltConnectionManager::_generate_next_alt_con_info()
 {
-  QUICConnectionId conn_id;
-  conn_id.randomize();
+  QUICConnectionId conn_id = this->_cid_manager.generate_id();
   QUICStatelessResetToken token(conn_id, this->_instance_id);
   AltConnectionInfo aci = {++this->_alt_quic_connection_id_seq_num, conn_id, token, {false}};
 
   if (this->_qc->direction() == NET_VCONNECTION_IN) {
-    this->_ctable.insert(conn_id, this->_qc);
+    this->_cid_manager.add_route(conn_id, this->_qc);
   }
 
   if (is_debug_tag_set(V_DEBUG_TAG)) {
@@ -262,7 +261,7 @@ QUICAltConnectionManager::invalidate_alt_connections()
   int n = this->_remote_active_cid_limit + ((this->_local_preferred_address == nullptr) ? 1 : 0);
 
   for (int i = 0; i < n; ++i) {
-    this->_ctable.erase(this->_alt_quic_connection_ids_local[i].id, this->_qc);
+    this->_cid_manager.remove_route(this->_alt_quic_connection_ids_local[i].id);
   }
 }
 
