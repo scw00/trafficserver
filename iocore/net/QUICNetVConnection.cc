@@ -372,6 +372,7 @@ QUICNetVConnection::acceptEvent(int event, Event *e)
   this->start();
 
   action_.continuation->handleEvent(NET_EVENT_ACCEPT, this);
+  this->handleEvent(event, e);
   this->_schedule_packet_write_ready();
 
   return EVENT_DONE;
@@ -1912,6 +1913,7 @@ QUICNetVConnection::_schedule_packet_write_ready(bool delay)
       this->_packet_write_ready = this->thread->schedule_imm(this, QUIC_EVENT_PACKET_WRITE_READY, nullptr);
     }
   }
+  this->nh->signalActivity();
 }
 
 void

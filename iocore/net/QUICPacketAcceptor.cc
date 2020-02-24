@@ -119,7 +119,6 @@ QUICPacketAcceptor::_process_recv_udp_packet(UDP2PacketUPtr p)
   if (!vc) {
     QUICConnectionId original_cid = dcid;
     QUICConnectionId peer_cid     = scid;
-
     if (is_debug_tag_set("quic_acceptor")) {
       char client_dcid_hex_str[QUICConnectionId::MAX_HEX_STR_LENGTH];
       original_cid.hex(client_dcid_hex_str, QUICConnectionId::MAX_HEX_STR_LENGTH);
@@ -200,8 +199,9 @@ QUICPacketAcceptor::_create_qvc(QUICConnectionId peer_cid, QUICConnectionId orig
   Connection c;
   c.setRemote(&from.sa);
 
-  auto vc  = static_cast<QUICNetVConnection *>(quic_NetProcessor.allocate_vc(nullptr));
-  auto con = this->create_udp_connection(from, to);
+  auto vc        = new QUICNetVConnection;
+  vc->ep.syscall = false;
+  auto con       = this->create_udp_connection(from, to);
 
   vc->init(peer_cid, original_cid, first_cid, this->_cid_manager, con);
   vc->id = net_next_connection_number();
@@ -213,6 +213,7 @@ QUICPacketAcceptor::_create_qvc(QUICConnectionId peer_cid, QUICConnectionId orig
   vc->set_is_transparent(false);
   vc->set_context(NET_VCONNECTION_IN);
 
+  Debug("quic_acceptor", "can not find qvc, create new one");
   this->_cid_manager.add_route(vc->connection_id(), vc);
   this->_cid_manager.add_route(original_cid, vc);
 
