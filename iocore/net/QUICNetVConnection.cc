@@ -254,7 +254,7 @@ QUICNetVConnection::init(QUICConnectionId peer_cid, QUICConnectionId original_ci
 
 void
 QUICNetVConnection::init(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
-                         QUICConnectionIdManager &manager, UDP2ConnectionImpl *con)
+                         QUICConnectionIdManager &manager, QUICResetTokenTable &rtable, UDP2ConnectionImpl *con)
 {
   SET_HANDLER((NetVConnHandler)&QUICNetVConnection::acceptEvent);
   this->_udp2_con                    = con;
@@ -262,17 +262,13 @@ QUICNetVConnection::init(QUICConnectionId peer_cid, QUICConnectionId original_ci
   this->_original_quic_connection_id = original_cid;
   this->_first_quic_connection_id    = first_cid;
   this->_cid_manager                 = &manager;
+  this->_rtable                      = &rtable;
   this->_quic_connection_id          = manager.generate_id();
 
   this->_update_cids();
 
   if (is_debug_tag_set(QUIC_DEBUG_TAG.data())) {
-    char dcid_hex_str[QUICConnectionId::MAX_HEX_STR_LENGTH];
-    char scid_hex_str[QUICConnectionId::MAX_HEX_STR_LENGTH];
-    this->_peer_quic_connection_id.hex(dcid_hex_str, QUICConnectionId::MAX_HEX_STR_LENGTH);
-    this->_quic_connection_id.hex(scid_hex_str, QUICConnectionId::MAX_HEX_STR_LENGTH);
-
-    QUICConDebug("dcid=%s scid=%s", dcid_hex_str, scid_hex_str);
+    QUICConDebug("dcid=%s scid=%s", this->_peer_quic_connection_id.hex().c_str(), this->_quic_connection_id.hex().c_str());
   }
 }
 
@@ -1181,9 +1177,9 @@ QUICNetVConnection::_state_handshake_process_initial_packet(const QUICInitialPac
 
     if (!this->_alt_con_manager) {
       this->_alt_con_manager =
-        new QUICAltConnectionManager(this, *this->_cid_manager, *this->_rtable, this->_peer_quic_connection_id, this->_quic_config->instance_id(),
-                                     this->_quic_config->active_cid_limit_in(), this->_quic_config->preferred_address_ipv4(),
-                                     this->_quic_config->preferred_address_ipv6());
+        new QUICAltConnectionManager(this, *this->_cid_manager, *this->_rtable, this->_peer_quic_connection_id,
+                                     this->_quic_config->instance_id(), this->_quic_config->active_cid_limit_in(),
+                                     this->_quic_config->preferred_address_ipv4(), this->_quic_config->preferred_address_ipv6());
       this->_frame_generators.add_generator(*this->_alt_con_manager, QUICFrameGeneratorWeight::EARLY);
       this->_frame_dispatcher->add_handler(this->_alt_con_manager);
     }
@@ -1204,8 +1200,8 @@ QUICNetVConnection::_state_handshake_process_initial_packet(const QUICInitialPac
   } else {
     if (!this->_alt_con_manager) {
       this->_alt_con_manager =
-        new QUICAltConnectionManager(this, *this->_cid_manager, *this->_rtable, this->_peer_quic_connection_id, this->_quic_config->instance_id(),
-                                     this->_quic_config->active_cid_limit_out());
+        new QUICAltConnectionManager(this, *this->_cid_manager, *this->_rtable, this->_peer_quic_connection_id,
+                                     this->_quic_config->instance_id(), this->_quic_config->active_cid_limit_out());
       this->_frame_generators.add_generator(*this->_alt_con_manager, QUICFrameGeneratorWeight::BEFORE_DATA);
       this->_frame_dispatcher->add_handler(this->_alt_con_manager);
     }

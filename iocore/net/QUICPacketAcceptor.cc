@@ -4,11 +4,15 @@
 #include "QUICPacketAcceptor.h"
 #include "P_QUICNetVConnection.h"
 #include "P_QUICNetProcessor.h"
+#include "QUICMultiCertConfigLoader.h"
+#include "QUICTLS.h"
 
 static constexpr char debug_tag[] = "quic_acceptor";
 
 #define QUICDebugDS(dcid, scid, fmt, ...) \
   Debug(debug_tag, "[%08" PRIx32 "-%08" PRIx32 "] " fmt, dcid.h32(), scid.h32(), ##__VA_ARGS__)
+
+#define QUICDebug(fmt, ...) Debug(debug_tag, fmt, ##__VA_ARGS__)
 
 QUICPacketAcceptor::QUICPacketAcceptor(EThread *t, int id) : Continuation(t->mutex), _cid_manager(id), _thread(t)
 {
@@ -100,26 +104,25 @@ QUICPacketAcceptor::_process_recv_udp_packet(UDP2PacketUPtr p)
   // connection ID is present in the header.
   if ((!vc && !QUICInvariants::is_long_header(buf)) || (vc && vc->in_closed_queue)) {
     if (is_debug_tag_set("quic_acceptor")) {
-      char dcid_str[QUICConnectionId::MAX_HEX_STR_LENGTH];
-      dcid.hex(dcid_str, QUICConnectionId::MAX_HEX_STR_LENGTH);
-
       if (!vc && !QUICInvariants::is_long_header(buf)) {
-        QUICDebugDS(scid, dcid, "sent Stateless Reset : connection not found, dcid=%s", dcid_str);
+        auto connection = static_cast<QUICNetVConnection *>(this->_check_stateless_reset(buf, buf_len));
+        if (connection) {
+          QUICDebug("Stateless Reset has been received");
+          connection->thread->schedule_imm(connection, QUIC_EVENT_STATELESS_RESET);
+          return;
+        }
+        QUICDebugDS(scid, dcid, "sent Stateless Reset : connection not found, dcid=%s", dcid.hex().c_str());
       } else if (vc && vc->in_closed_queue) {
-        QUICDebugDS(scid, dcid, "sent Stateless Reset : connection is already closed, dcid=%s", dcid_str);
+        QUICDebugDS(scid, dcid, "sent Stateless Reset : connection is already closed, dcid=%s", dcid.hex().c_str());
       }
     }
 
-    QUICStatelessResetToken token(dcid, params->instance_id());
-    auto packet = QUICPacketFactory::create_stateless_reset_packet(token);
-    this->_send_quic_packet(std::move(packet), p->to, p->from);
+    this->_send_stateless_reset(dcid, params->instance_id(), p->to, p->from, buf_len - 1);
     return;
   }
 
   if (is_debug_tag_set("quic_acceptor")) {
-    char client_dcid_hex_str[QUICConnectionId::MAX_HEX_STR_LENGTH];
-    dcid.hex(client_dcid_hex_str, QUICConnectionId::MAX_HEX_STR_LENGTH);
-    Debug("quic_acceptor", " [%08" PRIx64 "-%08" PRIx64 "] client initial dcid=%s", scid.hash(), dcid.hash(), client_dcid_hex_str);
+    Debug("quic_acceptor", " [%08" PRIx64 "-%08" PRIx64 "] client initial dcid=%s", scid.hash(), dcid.hash(), dcid.hex().c_str());
   }
 
   if (!vc) {
@@ -137,6 +140,12 @@ QUICPacketAcceptor::_process_recv_udp_packet(UDP2PacketUPtr p)
   }
 
   vc->handleEvent(QUIC_EVENT_PACKET_READ_READY, nullptr);
+}
+
+QUICConnection *
+QUICPacketAcceptor::_check_stateless_reset(const uint8_t *buf, size_t buf_len)
+{
+  return this->_rtable.lookup({buf + (buf_len - 16)});
 }
 
 int
@@ -169,6 +178,10 @@ QUICPacketAcceptor::_send_stateless_retry(const uint8_t *buf, uint64_t buf_len, 
         original_cid = token.original_dcid();
         return 0;
       } else {
+        QUICDebug("Retry token is invalid: ODCID=%" PRIx64 "token_length=%u token=%02x%02x%02x%02x...",
+                  static_cast<uint64_t>(token.original_dcid()), token.length(), token.buf()[0], token.buf()[1], token.buf()[2],
+                  token.buf()[3]);
+        this->_send_invalid_token_error(buf, buf_len, from, peer);
         return -3;
       }
     } else {
@@ -178,6 +191,56 @@ QUICPacketAcceptor::_send_stateless_retry(const uint8_t *buf, uint64_t buf_len, 
   }
 
   return 0;
+}
+
+bool
+QUICPacketAcceptor::_send_stateless_reset(QUICConnectionId dcid, uint32_t instance_id, const IpEndpoint &from, const IpEndpoint &to,
+                                          size_t maximum_size)
+{
+  QUICStatelessResetToken token(dcid, instance_id);
+  auto packet = QUICPacketFactory::create_stateless_reset_packet(token, maximum_size);
+  if (packet) {
+    this->_send_quic_packet(std::move(packet), from, to);
+    return true;
+  }
+  return false;
+}
+
+void
+QUICPacketAcceptor::_send_invalid_token_error(const uint8_t *initial_packet, uint64_t initial_packet_len, const IpEndpoint &from,
+                                              const IpEndpoint &to)
+{
+  QUICConnectionId scid_in_initial;
+  QUICConnectionId dcid_in_initial;
+  QUICInvariants::scid(scid_in_initial, initial_packet, initial_packet_len);
+  QUICInvariants::dcid(dcid_in_initial, initial_packet, initial_packet_len);
+
+  // Create CONNECTION_CLOSE frame
+  auto error = std::make_unique<QUICConnectionError>(QUICTransErrorCode::INVALID_TOKEN);
+  uint8_t frame_buf[QUICFrame::MAX_INSTANCE_SIZE];
+  QUICFrame *frame         = QUICFrameFactory::create_connection_close_frame(frame_buf, *error);
+  Ptr<IOBufferBlock> block = frame->to_io_buffer_block(1200);
+  size_t block_len         = 0;
+  for (Ptr<IOBufferBlock> tmp = block; tmp; tmp = tmp->next) {
+    block_len += tmp->size();
+  }
+  frame->~QUICFrame();
+
+  // Prepare for packet protection
+  QUICPacketProtectionKeyInfo ppki;
+  ppki.set_context(QUICPacketProtectionKeyInfo::Context::SERVER);
+  QUICPacketFactory pf(ppki);
+  QUICPacketHeaderProtector php(ppki);
+  QUICCertConfig::scoped_config server_cert;
+  QUICTLS tls(ppki, server_cert->ssl_default.get(), NET_VCONNECTION_IN, {}, "", "");
+  tls.initialize_key_materials(dcid_in_initial);
+
+  // Create INITIAL packet
+  QUICConnectionId scid = this->_cid_manager.generate_id();
+  uint8_t packet_buf[QUICPacket::MAX_INSTANCE_SIZE];
+  QUICPacketUPtr cc_packet = pf.create_initial_packet(packet_buf, scid_in_initial, scid, 0, block, block_len, 0, 0, 1);
+
+  this->_send_quic_packet(std::move(cc_packet), from, to);
 }
 
 void
@@ -203,7 +266,7 @@ QUICPacketAcceptor::_create_qvc(QUICConnectionId peer_cid, QUICConnectionId orig
   vc->ep.syscall = false;
   auto con       = this->create_udp_connection(from, to);
 
-  vc->init(peer_cid, original_cid, first_cid, this->_cid_manager, con);
+  vc->init(peer_cid, original_cid, first_cid, this->_cid_manager, this->_rtable, con);
   vc->id = net_next_connection_number();
   vc->con.move(c);
   vc->submit_time = Thread::get_hrtime();

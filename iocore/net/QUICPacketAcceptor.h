@@ -4,6 +4,7 @@
 #include "UDPPacket.h"
 #include "quic/QUICTypes.h"
 #include "quic/QUICConnectionIdManager.h"
+#include "QUICResetTokenTable.h"
 
 class QUICNetVConnection;
 class UDP2ConnectionImpl;
@@ -25,9 +26,15 @@ private:
   void _send_quic_packet(QUICPacketUPtr p, const IpEndpoint &from, const IpEndpoint &to);
   QUICNetVConnection *_create_qvc(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
                                   const IpEndpoint &from, const IpEndpoint &to);
+  void _send_invalid_token_error(const uint8_t *initial_packet, uint64_t initial_packet_len, const IpEndpoint &from,
+                                 const IpEndpoint &to);
+  bool _send_stateless_reset(QUICConnectionId dcid, uint32_t instance_id, const IpEndpoint &from, const IpEndpoint &to,
+                             size_t maximum_size);
+  QUICConnection *_check_stateless_reset(const uint8_t *buf, size_t buf_len);
 
   ASLL(UDP2Packet, link) _external_recv_list;
 
   QUICConnectionIdManager _cid_manager;
+  QUICResetTokenTable _rtable;
   EThread *_thread = nullptr;
 };

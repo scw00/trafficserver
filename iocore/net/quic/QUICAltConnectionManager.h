@@ -37,8 +37,9 @@ class QUICResetTokenTable;
 class QUICAltConnectionManager : public QUICFrameHandler, public QUICFrameGenerator
 {
 public:
-  QUICAltConnectionManager(QUICConnection *qc, QUICConnectionIdManager &manager, QUICResetTokenTable &rtable, const QUICConnectionId &peer_initial_cid,
-                           uint32_t instance_id, uint8_t active_cid_limit, const IpEndpoint *preferred_endpoint_ipv4 = nullptr,
+  QUICAltConnectionManager(QUICConnection *qc, QUICConnectionIdManager &manager, QUICResetTokenTable &rtable,
+                           const QUICConnectionId &peer_initial_cid, uint32_t instance_id, uint8_t active_cid_limit,
+                           const IpEndpoint *preferred_endpoint_ipv4 = nullptr,
                            const IpEndpoint *preferred_endpoint_ipv6 = nullptr);
   ~QUICAltConnectionManager();
 
@@ -96,12 +97,8 @@ private:
   };
 
   QUICConnection *_qc = nullptr;
-<<<<<<< HEAD
-  QUICConnectionTable &_ctable;
   QUICResetTokenTable &_rtable;
-=======
   QUICConnectionIdManager &_cid_manager;
->>>>>>> update
   AltConnectionInfo _alt_quic_connection_ids_local[8]; // 8 is perhaps enough
   std::vector<AltConnectionInfo> _alt_quic_connection_ids_remote;
   std::queue<uint64_t> _retired_seq_nums;

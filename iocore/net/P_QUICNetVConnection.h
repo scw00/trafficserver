@@ -150,7 +150,7 @@ public:
   void init(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid, UDPConnection *,
             QUICPacketHandler *, QUICResetTokenTable *rtable, QUICConnectionTable *ctable);
   void init(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
-            QUICConnectionIdManager &cid_manager, QUICResetTokenTable *rtable, UDP2ConnectionImpl *);
+            QUICConnectionIdManager &cid_manager, QUICResetTokenTable &rtable, UDP2ConnectionImpl *);
 
   // accept new conn_id
   int acceptEvent(int event, Event *e);
