@@ -116,15 +116,15 @@ QUICPacketAcceptor::_process_recv_udp_packet(UDP2PacketUPtr p)
     return;
   }
 
+  if (is_debug_tag_set("quic_acceptor")) {
+    char client_dcid_hex_str[QUICConnectionId::MAX_HEX_STR_LENGTH];
+    dcid.hex(client_dcid_hex_str, QUICConnectionId::MAX_HEX_STR_LENGTH);
+    Debug("quic_acceptor", " [%08" PRIx64 "-%08" PRIx64 "] client initial dcid=%s", scid.hash(), dcid.hash(), client_dcid_hex_str);
+  }
+
   if (!vc) {
     QUICConnectionId original_cid = dcid;
     QUICConnectionId peer_cid     = scid;
-    if (is_debug_tag_set("quic_acceptor")) {
-      char client_dcid_hex_str[QUICConnectionId::MAX_HEX_STR_LENGTH];
-      original_cid.hex(client_dcid_hex_str, QUICConnectionId::MAX_HEX_STR_LENGTH);
-      Debug("quic_acceptor", " [%08" PRIx32 "-%08" PRIx32 "] client initial dcid=%s", peer_cid.h32(), original_cid.h32(),
-            client_dcid_hex_str);
-    }
 
     vc = this->_create_qvc(peer_cid, original_cid, cid_in_retry_token, p->to, p->from);
   }
@@ -213,9 +213,9 @@ QUICPacketAcceptor::_create_qvc(QUICConnectionId peer_cid, QUICConnectionId orig
   vc->set_is_transparent(false);
   vc->set_context(NET_VCONNECTION_IN);
 
-  Debug("quic_acceptor", "can not find qvc, create new one");
   this->_cid_manager.add_route(vc->connection_id(), vc);
   this->_cid_manager.add_route(original_cid, vc);
+  Debug("quic_acceptor", "can not find qvc, create new one %lx %lx", vc->connection_id().hash(), original_cid.hash());
 
   return vc;
 }

@@ -268,10 +268,7 @@ public:
     return memcmp(this->_id, x._id, this->_len) != 0;
   }
 
-  // plus operation only support last 2 bytes +operations. It is equal to
-  //   uint16_t a = this->_id[last 2 bytes] + nums;
-  //   this->_id[last 2 bytes] = a
-  QUICConnectionId operator+(const int16_t num);
+  void operator+=(const int num);
 
   /*
    * This is just for debugging.

@@ -638,28 +638,20 @@ QUICConnectionId::randomize()
 uint64_t
 QUICConnectionId::_hashcode() const
 {
-  uint64_t code = 0;
-  for (auto i = MAX_LENGTH - 8 - 1; i < MAX_LENGTH; i++) {
-    if (i != 0) {
-      code = code << 8;
-    }
-
-    code |= this->_id[i] & 0xff;
-  }
-  return code;
+  return (static_cast<uint64_t>(this->_id[0]) << 56) + (static_cast<uint64_t>(this->_id[1]) << 48) +
+         (static_cast<uint64_t>(this->_id[2]) << 40) + (static_cast<uint64_t>(this->_id[3]) << 32) +
+         (static_cast<uint64_t>(this->_id[4]) << 24) + (static_cast<uint64_t>(this->_id[5]) << 16) +
+         (static_cast<uint64_t>(this->_id[6]) << 8) + (static_cast<uint64_t>(this->_id[7]));
 }
 
-QUICConnectionId
-QUICConnectionId::operator+(const int16_t num)
+void
+QUICConnectionId::operator+=(const int num)
 {
-  int16_t target = this->_hashcode() >> 52;
-  uint16_t code  = static_cast<uint16_t>(target + num);
-  for (auto i = MAX_LENGTH - 2 - 1; i >= 0 && code > 0; i--) {
+  uint64_t code = static_cast<int64_t>(this->_hashcode()) + num;
+  for (auto i = 7; i >= 0 && code > 0; i--) {
     this->_id[i] = code & 0xff;
     code         = code >> 8;
   }
-
-  return *this;
 }
 
 uint32_t

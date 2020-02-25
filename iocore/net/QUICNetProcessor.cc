@@ -260,14 +260,15 @@ QUICNetProcessor::send(QUICPacketUPtr p, const IpEndpoint &to)
 void
 QUICNetProcessor::dispatch(UDP2PacketUPtr p, QUICConnectionId dcid)
 {
-  uint64_t hash = dcid.hash() << 32;
+  uint64_t hash = dcid.hash();
   this->_acceptors[hash % this->_acceptors.size()]->dispatch(std::move(p));
 }
 
 QUICPacketAcceptor *
 QUICNetProcessor::create_acceptor(EThread *t)
 {
-  this->_acceptors.push_back(std::make_unique<QUICPacketAcceptor>(t, this->_acceptors.size() - 1));
+  this->_acceptors.push_back(
+    std::make_unique<QUICPacketAcceptor>(t, this->_acceptors.size() == 0 ? 0 : this->_acceptors.size() - 1));
   return this->_acceptors.back().get();
 }
 

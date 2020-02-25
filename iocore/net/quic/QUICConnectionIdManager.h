@@ -17,8 +17,13 @@ public:
     QUICConnectionId id;
     id.randomize();
 
-    int16_t add = id.hash() % eventProcessor.thread_group[ET_NET]._count;
-    id          = id + static_cast<int16_t>(add - this->_magic);
+    int add = id.hash() % eventProcessor.thread_group[ET_NET]._count;
+    if (add == this->_magic) {
+      return id;
+    }
+
+    id += (this->_magic + eventProcessor.thread_group[ET_NET]._count - add);
+    ink_release_assert(static_cast<int>(id.hash() % eventProcessor.thread_group[ET_NET]._count) == this->_magic);
     return id;
   }
 

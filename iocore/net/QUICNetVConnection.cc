@@ -2200,8 +2200,8 @@ QUICNetVConnection::_validate_new_path(const QUICPath &path)
 void
 QUICNetVConnection::_update_cids()
 {
-  snprintf(this->_cids_data, sizeof(this->_cids_data), "%08" PRIx32 "-%08" PRIx32 "", this->_peer_quic_connection_id.h32(),
-           this->_quic_connection_id.h32());
+  snprintf(this->_cids_data, sizeof(this->_cids_data), "%08" PRIx64 "-%08" PRIx64 "", this->_peer_quic_connection_id.hash(),
+           this->_quic_connection_id.hash());
 
   this->_cids = {this->_cids_data, sizeof(this->_cids_data)};
 }
