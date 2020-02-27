@@ -254,7 +254,7 @@ QUICNetVConnection::init(QUICConnectionId peer_cid, QUICConnectionId original_ci
 
 void
 QUICNetVConnection::init(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
-                         QUICConnectionIdManager &manager, QUICResetTokenTable &rtable, UDP2ConnectionImpl *con)
+                         QUICConnectionManager &manager, QUICResetTokenTable &rtable, UDP2ConnectionImpl *con)
 {
   SET_HANDLER((NetVConnHandler)&QUICNetVConnection::acceptEvent);
   this->_udp2_con                    = con;

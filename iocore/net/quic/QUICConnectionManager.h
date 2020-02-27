@@ -5,11 +5,11 @@
 
 #include "I_Net.h"
 
-class QUICConnectionIdManager
+class QUICConnectionManager
 {
 public:
-  QUICConnectionIdManager(int magic) : _magic(magic) {}
-  QUICConnectionIdManager();
+  QUICConnectionManager(int magic) : _magic(magic) {}
+  QUICConnectionManager();
 
   QUICConnectionId
   generate_id()

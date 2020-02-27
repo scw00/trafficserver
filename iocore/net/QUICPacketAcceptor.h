@@ -3,7 +3,7 @@
 #include "I_EventSystem.h"
 #include "UDPPacket.h"
 #include "quic/QUICTypes.h"
-#include "quic/QUICConnectionIdManager.h"
+#include "quic/QUICConnectionManager.h"
 #include "QUICResetTokenTable.h"
 
 class QUICNetVConnection;
@@ -34,7 +34,7 @@ private:
 
   ASLL(UDP2Packet, link) _external_recv_list;
 
-  QUICConnectionIdManager _cid_manager;
+  QUICConnectionManager _cid_manager;
   QUICResetTokenTable _rtable;
   EThread *_thread = nullptr;
 };

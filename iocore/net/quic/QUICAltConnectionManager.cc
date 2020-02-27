@@ -32,10 +32,9 @@ static constexpr char V_DEBUG_TAG[] = "v_quic_alt_con";
 
 #define QUICACMVDebug(fmt, ...) Debug(V_DEBUG_TAG, "[%s] " fmt, this->_qc->cids().data(), ##__VA_ARGS__)
 
-QUICAltConnectionManager::QUICAltConnectionManager(QUICConnection *qc, QUICConnectionIdManager &manager,
-                                                   QUICResetTokenTable &rtable, const QUICConnectionId &peer_initial_cid,
-                                                   uint32_t instance_id, uint8_t local_active_cid_limit,
-                                                   const IpEndpoint *preferred_endpoint_ipv4,
+QUICAltConnectionManager::QUICAltConnectionManager(QUICConnection *qc, QUICConnectionManager &manager, QUICResetTokenTable &rtable,
+                                                   const QUICConnectionId &peer_initial_cid, uint32_t instance_id,
+                                                   uint8_t local_active_cid_limit, const IpEndpoint *preferred_endpoint_ipv4,
                                                    const IpEndpoint *preferred_endpoint_ipv6)
   : _qc(qc), _rtable(rtable), _cid_manager(manager), _instance_id(instance_id), _local_active_cid_limit(local_active_cid_limit)
 {
