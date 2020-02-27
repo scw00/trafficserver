@@ -31,7 +31,8 @@ int
 QUICPacketDispatcher::startEvent(int event, void *data)
 {
   ink_release_assert(this->_from.isValid());
-  ink_release_assert(this->_con->create_socket(&this->_from.sa) == 0);
+  ink_release_assert(this->_con->create_socket(AF_INET) == 0);
+  ink_release_assert(this->_con->bind(&this->_from.sa) == 0);
   ink_release_assert(this->_con->start_io() >= 0);
   SET_HANDLER(&QUICPacketDispatcher::mainEvent);
   // this_ethread()->schedule_every(this, -100);

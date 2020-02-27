@@ -288,7 +288,8 @@ QUICPacketAcceptor::create_udp_connection(const IpEndpoint &from, const IpEndpoi
 {
   auto con = new UDP2ConnectionImpl(this, this->_thread);
   // TODO reuse socket
-  ink_release_assert(con->create_socket(&from.sa) >= 0);
+  ink_release_assert(con->create_socket(AF_INET) >= 0);
+  ink_release_assert(con->bind(&from.sa) >= 0);
   ink_release_assert(con->connect(&to.sa) >= 0);
   ink_release_assert(con->start_io() >= 0);
   return con;
