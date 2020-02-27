@@ -18,6 +18,7 @@ public:
   int mainEvent(int event, void *data);
 
   UDP2ConnectionImpl *create_udp_connection(const IpEndpoint &from, const IpEndpoint &to);
+  Action *connectUp(Continuation *c, sockaddr const *addr, const NetVCOptions &opt);
 
 private:
   void _process_recv_udp_packet(UDP2PacketUPtr p);

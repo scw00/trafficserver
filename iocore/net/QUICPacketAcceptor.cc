@@ -20,6 +20,43 @@ QUICPacketAcceptor::QUICPacketAcceptor(EThread *t, int id) : Continuation(t->mut
   SET_HANDLER(&QUICPacketAcceptor::mainEvent);
 }
 
+Action *
+QUICPacketAcceptor::connectUp(Continuation *c, sockaddr const *addr, const NetVCOptions &opt)
+{
+  IpEndpoint local{};
+  if (NetVCOptions::FOREIGN_ADDR == opt.addr_binding || NetVCOptions::INTF_ADDR == opt.addr_binding) {
+    // Same for now, transparency for foreign addresses must be handled
+    // *after* the socket is created, and we need to do this calculation
+    // before the socket to get the IP family correct.
+    ink_release_assert(opt.local_ip.isValid());
+    local.assign(opt.local_ip, htons(opt.local_port));
+  }
+
+  auto udp_con = this->create_udp_connection(local, {});
+  ink_release_assert(udp_con != nullptr);
+
+  auto qvc = new QUICNetVConnection;
+  auto cid = this->_cid_manager.generate_id();
+  qvc->init(cid, cid, this->_cid_manager, this->_rtable, udp_con);
+  // Connection ID will be changed
+  qvc->id = net_next_connection_number();
+  qvc->set_context(NET_VCONNECTION_OUT);
+  qvc->con.setRemote(addr);
+  qvc->submit_time = Thread::get_hrtime();
+  qvc->mutex       = c->mutex;
+  qvc->action_     = c;
+  qvc->ep.syscall  = false;
+
+  this->_cid_manager.add_route(qvc->connection_id(), qvc);
+
+  MUTEX_TRY_LOCK(lock, qvc->mutex, this_ethread());
+  MUTEX_TRY_LOCK(lock2, get_NetHandler(this_ethread())->mutex, this_ethread());
+  ink_release_assert(lock.is_locked());
+  ink_release_assert(lock2.is_locked());
+  qvc->connectUp(this_ethread(), -1);
+  return ACTION_RESULT_DONE;
+}
+
 int
 QUICPacketAcceptor::mainEvent(int event, void *data)
 {
@@ -289,8 +326,12 @@ QUICPacketAcceptor::create_udp_connection(const IpEndpoint &from, const IpEndpoi
   auto con = new UDP2ConnectionImpl(this, this->_thread);
   // TODO reuse socket
   ink_release_assert(con->create_socket(AF_INET) >= 0);
-  ink_release_assert(con->bind(&from.sa) >= 0);
-  ink_release_assert(con->connect(&to.sa) >= 0);
+  if (from.isValid()) {
+    ink_release_assert(con->bind(&from.sa) >= 0);
+  }
+  if (to.isValid()) {
+    ink_release_assert(con->connect(&to.sa) >= 0);
+  }
   ink_release_assert(con->start_io() >= 0);
   return con;
 }

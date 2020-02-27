@@ -253,6 +253,26 @@ QUICNetVConnection::init(QUICConnectionId peer_cid, QUICConnectionId original_ci
 }
 
 void
+QUICNetVConnection::init(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionManager &manager,
+                         QUICResetTokenTable &rtable, UDP2ConnectionImpl *con)
+{
+  SET_HANDLER((NetVConnHandler)&QUICNetVConnection::startEvent);
+  this->_udp2_con                    = con;
+  this->_peer_quic_connection_id     = peer_cid;
+  this->_original_quic_connection_id = original_cid;
+  this->_cid_manager                 = &manager;
+  this->_rtable                      = &rtable;
+  this->_quic_connection_id          = manager.generate_id();
+
+  this->_update_cids();
+
+  if (is_debug_tag_set(QUIC_DEBUG_TAG.data())) {
+    QUICConDebug("dcid=%s scid=%s", this->_peer_quic_connection_id.hex().c_str(), this->_quic_connection_id.hex().c_str());
+  }
+}
+
+// Initialize QUICNetVC for in coming connection (NET_VCONNECTION_IN)
+void
 QUICNetVConnection::init(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
                          QUICConnectionManager &manager, QUICResetTokenTable &rtable, UDP2ConnectionImpl *con)
 {
@@ -272,7 +292,6 @@ QUICNetVConnection::init(QUICConnectionId peer_cid, QUICConnectionId original_ci
   }
 }
 
-// Initialize QUICNetVC for in coming connection (NET_VCONNECTION_IN)
 void
 QUICNetVConnection::init(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
                          UDPConnection *udp_con, QUICPacketHandler *packet_handler, QUICResetTokenTable *rtable,
@@ -1500,6 +1519,7 @@ QUICNetVConnection::_state_common_send_packet()
     if (written) {
       auto packet   = std::make_unique<UDP2Packet>();
       packet->chain = udp_payload;
+      packet->to    = this->remote_addr;
       this->_udp2_con->send(std::move(packet));
       // this->_packet_handler->send_packet(this, udp_payload);
     } else {

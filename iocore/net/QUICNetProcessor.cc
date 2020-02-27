@@ -104,79 +104,7 @@ QUICNetProcessor::allocate_vc(EThread *t)
 Action *
 QUICNetProcessor::connect_re(Continuation *cont, sockaddr const *remote_addr, NetVCOptions *opt)
 {
-  Debug("quic_ps", "connect to server");
-  EThread *t = cont->mutex->thread_holding;
-  ink_assert(t);
-  QUICNetVConnection *vc = static_cast<QUICNetVConnection *>(this->allocate_vc(t));
-
-  if (opt) {
-    vc->options = *opt;
-  } else {
-    opt = &vc->options;
-  }
-
-  int fd;
-  Action *status;
-  bool result = udpNet.CreateUDPSocket(&fd, remote_addr, &status, *opt);
-  if (!result) {
-    vc->free(t);
-    return status;
-  }
-
-  // Setup UDPConnection
-  UnixUDPConnection *con = new UnixUDPConnection(fd);
-  Debug("quic_ps", "con=%p fd=%d", con, fd);
-
-  this->_rtable                        = new QUICResetTokenTable();
-  QUICPacketHandlerOut *packet_handler = new QUICPacketHandlerOut(*this->_rtable);
-  if (opt->local_ip.isValid()) {
-    con->setBinding(opt->local_ip, opt->local_port);
-  }
-  con->bindToThread(packet_handler);
-
-  PollCont *pc       = get_UDPPollCont(con->ethread);
-  PollDescriptor *pd = pc->pollDescriptor;
-
-  errno   = 0;
-  int res = con->ep.start(pd, con, EVENTIO_READ);
-  if (res < 0) {
-    Debug("udpnet", "Error: %s (%d)", strerror(errno), errno);
-  }
-
-  // Setup QUICNetVConnection
-  QUICConnectionId client_dst_cid;
-  client_dst_cid.randomize();
-  // vc->init set handler of vc `QUICNetVConnection::startEvent`
-  vc->init(client_dst_cid, client_dst_cid, con, packet_handler, this->_rtable);
-  packet_handler->init(vc);
-
-  // Connection ID will be changed
-  vc->id = net_next_connection_number();
-  vc->set_context(NET_VCONNECTION_OUT);
-  vc->con.setRemote(remote_addr);
-  vc->submit_time = Thread::get_hrtime();
-  vc->mutex       = cont->mutex;
-  vc->action_     = cont;
-
-  if (t->is_event_type(opt->etype)) {
-    MUTEX_TRY_LOCK(lock, cont->mutex, t);
-    if (lock.is_locked()) {
-      MUTEX_TRY_LOCK(lock2, get_NetHandler(t)->mutex, t);
-      if (lock2.is_locked()) {
-        vc->connectUp(t, NO_FD);
-        return ACTION_RESULT_DONE;
-      }
-    }
-  }
-
-  // Try to stay on the current thread if it is the right type
-  if (t->is_event_type(opt->etype)) {
-    t->schedule_imm(vc);
-  } else { // Otherwise, pass along to another thread of the right type
-    eventProcessor.schedule_imm(vc, opt->etype);
-  }
-
-  return ACTION_RESULT_DONE;
+  return this->create_acceptor(this_ethread())->connectUp(cont, remote_addr, *opt);
 }
 
 Action *
@@ -267,6 +195,9 @@ QUICNetProcessor::dispatch(UDP2PacketUPtr p, QUICConnectionId dcid)
 QUICPacketAcceptor *
 QUICNetProcessor::create_acceptor(EThread *t)
 {
+  static Ptr<ProxyMutex> mutex = Ptr<ProxyMutex>(new_ProxyMutex());
+  ink_release_assert(t == this_ethread());
+  SCOPED_MUTEX_LOCK(lock, mutex, t);
   this->_acceptors.push_back(
     std::make_unique<QUICPacketAcceptor>(t, this->_acceptors.size() == 0 ? 0 : this->_acceptors.size() - 1));
   return this->_acceptors.back().get();
