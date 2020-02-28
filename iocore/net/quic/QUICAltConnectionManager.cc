@@ -38,6 +38,7 @@ QUICAltConnectionManager::QUICAltConnectionManager(QUICConnection *qc, QUICConne
                                                    const IpEndpoint *preferred_endpoint_ipv6)
   : _qc(qc), _rtable(rtable), _cid_manager(manager), _instance_id(instance_id), _local_active_cid_limit(local_active_cid_limit)
 {
+  memset(this->_alt_quic_connection_ids_local, 0, sizeof(AltConnectionInfo) * MAX_ALT_CONNECTION_ID_LOCAL);
   // Sequence number of the initial CID is 0
   this->_alt_quic_connection_ids_remote.push_back({0, peer_initial_cid, {}, {true}});
   this->_alt_quic_connection_ids_local[0].seq_num    = 0;
@@ -69,7 +70,13 @@ QUICAltConnectionManager::QUICAltConnectionManager(QUICConnection *qc, QUICConne
 
 QUICAltConnectionManager::~QUICAltConnectionManager()
 {
-  ats_free(this->_alt_quic_connection_ids_local);
+  // ats_free(this->_alt_quic_connection_ids_local);
+  for (auto i = 0; i < MAX_ALT_CONNECTION_ID_LOCAL; i++) {
+    if (this->_alt_quic_connection_ids_local[i].id.length() != 0 &&
+        this->_alt_quic_connection_ids_local[i].id != QUICConnectionId::ZERO()) {
+      this->_cid_manager.remove_route(this->_alt_quic_connection_ids_local[i].id);
+    }
+  }
   delete this->_local_preferred_address;
 }
 

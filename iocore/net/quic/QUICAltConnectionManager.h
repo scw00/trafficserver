@@ -96,10 +96,12 @@ private:
     };
   };
 
+  static constexpr int MAX_ALT_CONNECTION_ID_LOCAL = 8; // 8 is perhaps enough
+
   QUICConnection *_qc = nullptr;
   QUICResetTokenTable &_rtable;
   QUICConnectionManager &_cid_manager;
-  AltConnectionInfo _alt_quic_connection_ids_local[8]; // 8 is perhaps enough
+  AltConnectionInfo _alt_quic_connection_ids_local[MAX_ALT_CONNECTION_ID_LOCAL];
   std::vector<AltConnectionInfo> _alt_quic_connection_ids_remote;
   std::queue<uint64_t> _retired_seq_nums;
   uint32_t _instance_id                          = 0;

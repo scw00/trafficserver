@@ -31,6 +31,7 @@ public:
   add_route(const QUICConnectionId &id, QUICConnection *vc)
   {
     this->_qvcs.emplace(id, vc);
+    Debug("quic_con_m", "add route %s, qvc: %p", id.hex().c_str(), vc);
   }
 
   QUICConnection *
@@ -47,6 +48,7 @@ public:
   void
   remove_route(const QUICConnectionId &id)
   {
+    Debug("quic_con_m", "delete route %s", id.hex().c_str());
     this->_qvcs.erase(id);
   }
 

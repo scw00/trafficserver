@@ -269,7 +269,8 @@ QUICNetVConnection::~QUICNetVConnection()
   this->_unschedule_ack_manager_periodic();
   this->_unschedule_packet_write_ready();
   this->_unschedule_closing_timeout();
-  this->_unschedule_closed_event();
+  delete this->_alt_con_manager;
+  // this->_unschedule_closed_event();
 }
 
 // XXX This might be called on ET_UDP thread
@@ -530,7 +531,10 @@ QUICNetVConnection::free(EThread *t)
     super::clear();
   */
   ALPNSupport::clear();
-  this->_packet_handler->close_connection(this);
+  this->_cid_manager->remove_route(this->_original_quic_connection_id);
+  this->_cid_manager->remove_route(this->_quic_connection_id);
+  delete this;
+  // this->_packet_handler->close_connection(this);
 }
 
 void
