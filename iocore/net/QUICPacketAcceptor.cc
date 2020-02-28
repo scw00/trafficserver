@@ -35,9 +35,8 @@ QUICPacketAcceptor::connectUp(Continuation *c, sockaddr const *addr, const NetVC
   auto udp_con = this->create_udp_connection(local, {});
   ink_release_assert(udp_con != nullptr);
 
-  auto qvc = new QUICNetVConnection;
   auto cid = this->_cid_manager.generate_id();
-  qvc->init(cid, cid, this->_cid_manager, this->_rtable, udp_con);
+  auto qvc = new QUICNetVConnection(cid, cid, this->_cid_manager, this->_rtable, udp_con);
   // Connection ID will be changed
   qvc->id = net_next_connection_number();
   qvc->set_context(NET_VCONNECTION_OUT);
@@ -299,19 +298,17 @@ QUICPacketAcceptor::_create_qvc(QUICConnectionId peer_cid, QUICConnectionId orig
   Connection c;
   c.setRemote(&from.sa);
 
-  auto vc        = new QUICNetVConnection;
-  vc->ep.syscall = false;
-  auto con       = this->create_udp_connection(from, to);
-
-  vc->init(peer_cid, original_cid, first_cid, this->_cid_manager, this->_rtable, con);
-  vc->id = net_next_connection_number();
-  vc->con.move(c);
+  auto con        = this->create_udp_connection(from, to);
+  auto vc         = new QUICNetVConnection(peer_cid, original_cid, first_cid, this->_cid_manager, this->_rtable, con);
+  vc->ep.syscall  = false;
+  vc->id          = net_next_connection_number();
   vc->submit_time = Thread::get_hrtime();
   vc->thread      = this_ethread();
   vc->action_     = quic_NetProcessor.get_action();
   vc->mutex       = new_ProxyMutex();
   vc->set_is_transparent(false);
   vc->set_context(NET_VCONNECTION_IN);
+  vc->con.move(c);
 
   this->_cid_manager.add_route(vc->connection_id(), vc);
   this->_cid_manager.add_route(original_cid, vc);

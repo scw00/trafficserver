@@ -143,17 +143,17 @@ class QUICNetVConnection : public UnixNetVConnection, public QUICConnection, pub
   using super = UnixNetVConnection; ///< Parent type.
 
 public:
+  QUICNetVConnection(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
+                     QUICConnectionManager &cid_manager, QUICResetTokenTable &rtable, UDP2ConnectionImpl *);
+  QUICNetVConnection(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionManager &, QUICResetTokenTable &rtable,
+                     UDP2ConnectionImpl *);
   QUICNetVConnection();
+
   ~QUICNetVConnection();
   void init(QUICConnectionId peer_cid, QUICConnectionId original_cid, UDPConnection *, QUICPacketHandler *,
             QUICResetTokenTable *rtable);
   void init(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid, UDPConnection *,
             QUICPacketHandler *, QUICResetTokenTable *rtable, QUICConnectionTable *ctable);
-
-  void init(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
-            QUICConnectionManager &cid_manager, QUICResetTokenTable &rtable, UDP2ConnectionImpl *);
-  void init(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionManager &, QUICResetTokenTable &rtable,
-            UDP2ConnectionImpl *);
 
   // accept new conn_id
   int acceptEvent(int event, Event *e);

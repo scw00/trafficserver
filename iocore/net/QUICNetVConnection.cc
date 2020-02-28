@@ -223,6 +223,47 @@ private:
 
 QUICNetVConnection::QUICNetVConnection() : _packet_factory(this->_pp_key_info), _ph_protector(this->_pp_key_info) {}
 
+// Initialize QUICNetVC for out going connection (NET_VCONNECTION_OUT)
+QUICNetVConnection::QUICNetVConnection(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionManager &manager,
+                                       QUICResetTokenTable &rtable, UDP2ConnectionImpl *con)
+  : _packet_factory(this->_pp_key_info), _ph_protector(this->_pp_key_info)
+{
+  SET_HANDLER((NetVConnHandler)&QUICNetVConnection::startEvent);
+  this->_udp2_con                    = con;
+  this->_peer_quic_connection_id     = peer_cid;
+  this->_original_quic_connection_id = original_cid;
+  this->_cid_manager                 = &manager;
+  this->_rtable                      = &rtable;
+  this->_quic_connection_id          = manager.generate_id();
+
+  this->_update_cids();
+
+  if (is_debug_tag_set(QUIC_DEBUG_TAG.data())) {
+    QUICConDebug("dcid=%s scid=%s", this->_peer_quic_connection_id.hex().c_str(), this->_quic_connection_id.hex().c_str());
+  }
+}
+
+// Initialize QUICNetVC for in coming connection (NET_VCONNECTION_IN)
+QUICNetVConnection::QUICNetVConnection(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
+                                       QUICConnectionManager &manager, QUICResetTokenTable &rtable, UDP2ConnectionImpl *con)
+  : _packet_factory(this->_pp_key_info), _ph_protector(this->_pp_key_info)
+{
+  SET_HANDLER((NetVConnHandler)&QUICNetVConnection::acceptEvent);
+  this->_udp2_con                    = con;
+  this->_peer_quic_connection_id     = peer_cid;
+  this->_original_quic_connection_id = original_cid;
+  this->_first_quic_connection_id    = first_cid;
+  this->_cid_manager                 = &manager;
+  this->_rtable                      = &rtable;
+  this->_quic_connection_id          = manager.generate_id();
+
+  this->_update_cids();
+
+  if (is_debug_tag_set(QUIC_DEBUG_TAG.data())) {
+    QUICConDebug("dcid=%s scid=%s", this->_peer_quic_connection_id.hex().c_str(), this->_quic_connection_id.hex().c_str());
+  }
+}
+
 QUICNetVConnection::~QUICNetVConnection()
 {
   this->_unschedule_ack_manager_periodic();
@@ -252,46 +293,7 @@ QUICNetVConnection::init(QUICConnectionId peer_cid, QUICConnectionId original_ci
   }
 }
 
-void
-QUICNetVConnection::init(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionManager &manager,
-                         QUICResetTokenTable &rtable, UDP2ConnectionImpl *con)
-{
-  SET_HANDLER((NetVConnHandler)&QUICNetVConnection::startEvent);
-  this->_udp2_con                    = con;
-  this->_peer_quic_connection_id     = peer_cid;
-  this->_original_quic_connection_id = original_cid;
-  this->_cid_manager                 = &manager;
-  this->_rtable                      = &rtable;
-  this->_quic_connection_id          = manager.generate_id();
-
-  this->_update_cids();
-
-  if (is_debug_tag_set(QUIC_DEBUG_TAG.data())) {
-    QUICConDebug("dcid=%s scid=%s", this->_peer_quic_connection_id.hex().c_str(), this->_quic_connection_id.hex().c_str());
-  }
-}
-
 // Initialize QUICNetVC for in coming connection (NET_VCONNECTION_IN)
-void
-QUICNetVConnection::init(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
-                         QUICConnectionManager &manager, QUICResetTokenTable &rtable, UDP2ConnectionImpl *con)
-{
-  SET_HANDLER((NetVConnHandler)&QUICNetVConnection::acceptEvent);
-  this->_udp2_con                    = con;
-  this->_peer_quic_connection_id     = peer_cid;
-  this->_original_quic_connection_id = original_cid;
-  this->_first_quic_connection_id    = first_cid;
-  this->_cid_manager                 = &manager;
-  this->_rtable                      = &rtable;
-  this->_quic_connection_id          = manager.generate_id();
-
-  this->_update_cids();
-
-  if (is_debug_tag_set(QUIC_DEBUG_TAG.data())) {
-    QUICConDebug("dcid=%s scid=%s", this->_peer_quic_connection_id.hex().c_str(), this->_quic_connection_id.hex().c_str());
-  }
-}
-
 void
 QUICNetVConnection::init(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
                          UDPConnection *udp_con, QUICPacketHandler *packet_handler, QUICResetTokenTable *rtable,
