@@ -14,6 +14,59 @@ static constexpr char debug_tag[] = "quic_acceptor";
 
 #define QUICDebug(fmt, ...) Debug(debug_tag, fmt, ##__VA_ARGS__)
 
+QUICUDPConnectionWrapper::~QUICUDPConnectionWrapper()
+{
+  this->_udp_con.close();
+  if (is_debug_tag_set("quic_conw")) {
+    char buff[INET6_ADDRPORTSTRLEN * 2] = {0};
+    auto from                           = this->_udp_con.from();
+    auto to                             = this->_udp_con.to();
+    Debug("quic_conw", "close udp connection %s -> %s", ats_ip_nptop(&from.sa, buff, sizeof(buff) - INET6_ADDRPORTSTRLEN),
+          ats_ip_nptop(&to.sa, buff + INET6_ADDRPORTSTRLEN, sizeof(buff) - INET6_ADDRPORTSTRLEN));
+  }
+}
+
+void
+QUICUDPConnectionWrapper::bind(QUICNetVConnection *qvc)
+{
+  this->_bond_connections.emplace(qvc, qvc);
+}
+
+void
+QUICUDPConnectionWrapper::close(QUICNetVConnection *qvc)
+{
+  this->_bond_connections.erase(qvc);
+}
+
+void
+QUICUDPConnectionWrapper::send(UDP2PacketUPtr packet, bool flush)
+{
+  this->_udp_con.send(std::move(packet), flush);
+}
+
+void
+QUICUDPConnectionWrapper::signal(int event)
+{
+  for (auto it : this->_bond_connections) {
+    it.second->handleEvent(event, this);
+  }
+}
+
+IpEndpoint
+QUICUDPConnectionWrapper::from() const
+{
+  return this->_udp_con.from();
+}
+
+IpEndpoint
+QUICUDPConnectionWrapper::to() const
+{
+  return this->_udp_con.to();
+}
+
+//
+// QUICPacketAcceptor
+//
 QUICPacketAcceptor::QUICPacketAcceptor(EThread *t, int id) : Continuation(t->mutex), _cid_manager(id), _thread(t)
 {
   t->schedule_every(this, -100);
@@ -34,9 +87,10 @@ QUICPacketAcceptor::connectUp(Continuation *c, sockaddr const *addr, const NetVC
 
   auto udp_con = this->create_udp_connection(local, {});
   ink_release_assert(udp_con != nullptr);
+  auto udpw = std::make_shared<QUICUDPConnectionWrapper>(*udp_con);
 
   auto cid = this->_cid_manager.generate_id();
-  auto qvc = new QUICNetVConnection(cid, cid, this->_cid_manager, this->_rtable, udp_con);
+  auto qvc = new QUICNetVConnection(cid, cid, this->_cid_manager, this->_rtable, udpw);
   // Connection ID will be changed
   qvc->id = net_next_connection_number();
   qvc->set_context(NET_VCONNECTION_OUT);
@@ -75,14 +129,15 @@ QUICPacketAcceptor::mainEvent(int event, void *data)
   }
   case NET_EVENT_DATAGRAM_CONNECT_SUCCESS:
   case NET_EVENT_DATAGRAM_READ_READY: {
-    UDP2Connection *con = static_cast<UDP2Connection *>(data);
+    UDP2ConnectionImpl *con = static_cast<UDP2ConnectionImpl *>(data);
+    ink_release_assert(con != nullptr);
     while (true) {
       auto p = con->recv();
       if (p == nullptr) {
         return 0;
       }
 
-      this->_process_recv_udp_packet(std::move(p));
+      this->_process_recv_udp_packet(std::move(p), con);
     }
 
     break;
@@ -97,7 +152,7 @@ QUICPacketAcceptor::mainEvent(int event, void *data)
 }
 
 void
-QUICPacketAcceptor::_process_recv_udp_packet(UDP2PacketUPtr p)
+QUICPacketAcceptor::_process_recv_udp_packet(UDP2PacketUPtr p, UDP2ConnectionImpl *udp_con)
 {
   // Assumption: udp_packet has only one IOBufferBlock
   const uint8_t *buf = reinterpret_cast<uint8_t *>(p->chain->start());
@@ -165,7 +220,7 @@ QUICPacketAcceptor::_process_recv_udp_packet(UDP2PacketUPtr p)
     QUICConnectionId original_cid = dcid;
     QUICConnectionId peer_cid     = scid;
 
-    vc = this->_create_qvc(peer_cid, original_cid, cid_in_retry_token, p->to, p->from);
+    vc = this->_create_qvc(peer_cid, original_cid, cid_in_retry_token, p->to, p->from, udp_con);
   }
 
   vc->handle_received_packet(std::move(p));
@@ -293,13 +348,22 @@ QUICPacketAcceptor::_send_quic_packet(QUICPacketUPtr p, const IpEndpoint &from, 
 
 QUICNetVConnection *
 QUICPacketAcceptor::_create_qvc(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
-                                const IpEndpoint &from, const IpEndpoint &to)
+                                const IpEndpoint &from, const IpEndpoint &to, UDP2ConnectionImpl *udp_con)
 {
   Connection c;
   c.setRemote(&from.sa);
 
-  auto con        = this->create_udp_connection(from, to);
-  auto vc         = new QUICNetVConnection(peer_cid, original_cid, first_cid, this->_cid_manager, this->_rtable, con);
+  std::shared_ptr<QUICUDPConnectionWrapper> udpw;
+  if (udp_con != nullptr) {
+    auto udp_tmp = static_cast<QUICUDPConnectionWrapper *>(udp_con->get_data());
+    udpw         = udp_tmp->shared_from_this();
+  } else {
+    udp_con = this->create_udp_connection(from, to);
+    udpw    = std::make_shared<QUICUDPConnectionWrapper>(*udp_con);
+    udp_con->set_data(udpw.get());
+  }
+
+  auto vc         = new QUICNetVConnection(peer_cid, original_cid, first_cid, this->_cid_manager, this->_rtable, udpw);
   vc->ep.syscall  = false;
   vc->id          = net_next_connection_number();
   vc->submit_time = Thread::get_hrtime();

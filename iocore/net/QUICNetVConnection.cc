@@ -225,7 +225,7 @@ QUICNetVConnection::QUICNetVConnection() : _packet_factory(this->_pp_key_info), 
 
 // Initialize QUICNetVC for out going connection (NET_VCONNECTION_OUT)
 QUICNetVConnection::QUICNetVConnection(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionManager &manager,
-                                       QUICResetTokenTable &rtable, UDP2ConnectionImpl *con)
+                                       QUICResetTokenTable &rtable, std::shared_ptr<QUICUDPConnectionWrapper> &con)
   : _packet_factory(this->_pp_key_info), _ph_protector(this->_pp_key_info)
 {
   SET_HANDLER((NetVConnHandler)&QUICNetVConnection::startEvent);
@@ -237,6 +237,7 @@ QUICNetVConnection::QUICNetVConnection(QUICConnectionId peer_cid, QUICConnection
   this->_quic_connection_id          = manager.generate_id();
 
   this->_update_cids();
+  con->bind(this);
 
   if (is_debug_tag_set(QUIC_DEBUG_TAG.data())) {
     QUICConDebug("dcid=%s scid=%s", this->_peer_quic_connection_id.hex().c_str(), this->_quic_connection_id.hex().c_str());
@@ -245,7 +246,8 @@ QUICNetVConnection::QUICNetVConnection(QUICConnectionId peer_cid, QUICConnection
 
 // Initialize QUICNetVC for in coming connection (NET_VCONNECTION_IN)
 QUICNetVConnection::QUICNetVConnection(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
-                                       QUICConnectionManager &manager, QUICResetTokenTable &rtable, UDP2ConnectionImpl *con)
+                                       QUICConnectionManager &manager, QUICResetTokenTable &rtable,
+                                       std::shared_ptr<QUICUDPConnectionWrapper> &con)
   : _packet_factory(this->_pp_key_info), _ph_protector(this->_pp_key_info)
 {
   SET_HANDLER((NetVConnHandler)&QUICNetVConnection::acceptEvent);
@@ -258,6 +260,7 @@ QUICNetVConnection::QUICNetVConnection(QUICConnectionId peer_cid, QUICConnection
   this->_quic_connection_id          = manager.generate_id();
 
   this->_update_cids();
+  con->bind(this);
 
   if (is_debug_tag_set(QUIC_DEBUG_TAG.data())) {
     QUICConDebug("dcid=%s scid=%s", this->_peer_quic_connection_id.hex().c_str(), this->_quic_connection_id.hex().c_str());
@@ -269,6 +272,7 @@ QUICNetVConnection::~QUICNetVConnection()
   this->_unschedule_ack_manager_periodic();
   this->_unschedule_packet_write_ready();
   this->_unschedule_closing_timeout();
+  this->_udp2_con->close(this);
   delete this->_alt_con_manager;
   // this->_unschedule_closed_event();
 }

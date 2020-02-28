@@ -86,7 +86,7 @@ class QUICPacketHandler;
 class QUICLossDetector;
 class QUICHandshake;
 class QUICPacketAcceptor;
-class UDP2ConnectionImpl;
+class QUICUDPConnectionWrapper;
 
 class SSLNextProtocolSet;
 
@@ -144,9 +144,9 @@ class QUICNetVConnection : public UnixNetVConnection, public QUICConnection, pub
 
 public:
   QUICNetVConnection(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
-                     QUICConnectionManager &cid_manager, QUICResetTokenTable &rtable, UDP2ConnectionImpl *);
+                     QUICConnectionManager &cid_manager, QUICResetTokenTable &rtable, std::shared_ptr<QUICUDPConnectionWrapper> &);
   QUICNetVConnection(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionManager &, QUICResetTokenTable &rtable,
-                     UDP2ConnectionImpl *);
+                     std::shared_ptr<QUICUDPConnectionWrapper> &);
   QUICNetVConnection();
 
   ~QUICNetVConnection();
@@ -375,7 +375,7 @@ private:
 
   std::unique_ptr<QUICContextImpl> _context;
 
-  UDP2ConnectionImpl *_udp2_con       = nullptr;
+  std::shared_ptr<QUICUDPConnectionWrapper> _udp2_con;
   QUICConnectionManager *_cid_manager = nullptr;
 };
 
