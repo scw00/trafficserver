@@ -88,8 +88,8 @@ private:
 
   Ptr<NetAcceptAction> _action;
 
-  QUICConnectionTable *_ctable = nullptr;
   QUICResetTokenTable *_rtable = nullptr;
+  QUICConnectionTable *_ctable = nullptr;
 
   std::unordered_map<uint64_t, std::unique_ptr<QUICPacketDispatcher>> _dispatchers;
   std::vector<std::unique_ptr<QUICPacketAcceptor>> _acceptors;

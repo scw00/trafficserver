@@ -67,7 +67,6 @@
 #include "quic/QUICPacketProtectionKeyInfo.h"
 #include "quic/QUICContext.h"
 #include "quic/QUICTokenCreator.h"
-#include "quic/QUICConnectionManager.h"
 
 #include "UDPPacket.h"
 
@@ -86,6 +85,7 @@ class QUICPacketHandler;
 class QUICLossDetector;
 class QUICHandshake;
 class QUICPacketAcceptor;
+class QUICAltConnectionManager;
 class QUICUDPConnectionWrapper;
 
 class SSLNextProtocolSet;
@@ -144,8 +144,8 @@ class QUICNetVConnection : public UnixNetVConnection, public QUICConnection, pub
 
 public:
   QUICNetVConnection(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
-                     QUICConnectionManager &cid_manager, QUICResetTokenTable &rtable, std::shared_ptr<QUICUDPConnectionWrapper> &);
-  QUICNetVConnection(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionManager &, QUICResetTokenTable &rtable,
+                     QUICConnectionTable &cid_manager, QUICResetTokenTable &rtable, std::shared_ptr<QUICUDPConnectionWrapper> &);
+  QUICNetVConnection(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionTable &, QUICResetTokenTable &rtable,
                      std::shared_ptr<QUICUDPConnectionWrapper> &);
   QUICNetVConnection();
 
@@ -263,11 +263,11 @@ private:
   QUICRemoteFlowController *_remote_flow_controller = nullptr;
   QUICLocalFlowController *_local_flow_controller   = nullptr;
   QUICResetTokenTable *_rtable                      = nullptr;
-  QUICConnectionTable *_ctable                      = nullptr;
   QUICAltConnectionManager *_alt_con_manager        = nullptr;
   QUICPathValidator *_path_validator                = nullptr;
   QUICPathManager *_path_manager                    = nullptr;
   QUICTokenCreator *_token_creator                  = nullptr;
+  QUICConnectionTable *_ctable                      = nullptr;
 
   QUICFrameGeneratorManager _frame_generators;
 
@@ -376,7 +376,6 @@ private:
   std::unique_ptr<QUICContextImpl> _context;
 
   std::shared_ptr<QUICUDPConnectionWrapper> _udp2_con;
-  QUICConnectionManager *_cid_manager = nullptr;
 };
 
 typedef int (QUICNetVConnection::*QUICNetVConnHandler)(int, void *);

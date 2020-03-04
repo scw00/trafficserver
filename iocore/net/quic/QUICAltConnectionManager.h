@@ -28,7 +28,6 @@
 
 #include "QUICFrameGenerator.h"
 #include "QUICTypes.h"
-#include "QUICConnectionManager.h"
 #include "QUICConnection.h"
 
 class QUICConnectionTable;
@@ -37,7 +36,7 @@ class QUICResetTokenTable;
 class QUICAltConnectionManager : public QUICFrameHandler, public QUICFrameGenerator
 {
 public:
-  QUICAltConnectionManager(QUICConnection *qc, QUICConnectionManager &manager, QUICResetTokenTable &rtable,
+  QUICAltConnectionManager(QUICConnection *qc, QUICConnectionTable &ctable, QUICResetTokenTable &rtable,
                            const QUICConnectionId &peer_initial_cid, uint32_t instance_id, uint8_t active_cid_limit,
                            const IpEndpoint *preferred_endpoint_ipv4 = nullptr,
                            const IpEndpoint *preferred_endpoint_ipv6 = nullptr);
@@ -99,8 +98,8 @@ private:
   static constexpr int MAX_ALT_CONNECTION_ID_LOCAL = 8; // 8 is perhaps enough
 
   QUICConnection *_qc = nullptr;
+  QUICConnectionTable &_ctable;
   QUICResetTokenTable &_rtable;
-  QUICConnectionManager &_cid_manager;
   AltConnectionInfo _alt_quic_connection_ids_local[MAX_ALT_CONNECTION_ID_LOCAL];
   std::vector<AltConnectionInfo> _alt_quic_connection_ids_remote;
   std::queue<uint64_t> _retired_seq_nums;

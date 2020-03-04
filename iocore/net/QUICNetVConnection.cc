@@ -42,6 +42,7 @@
 #include "QUICHandshake.h"
 #include "QUICConfig.h"
 #include "QUICIntUtil.h"
+#include "QUICUDPConnectionWrapper.h"
 
 using namespace std::literals;
 static constexpr std::string_view QUIC_DEBUG_TAG = "quic_net"sv;
@@ -224,7 +225,7 @@ private:
 QUICNetVConnection::QUICNetVConnection() : _packet_factory(this->_pp_key_info), _ph_protector(this->_pp_key_info) {}
 
 // Initialize QUICNetVC for out going connection (NET_VCONNECTION_OUT)
-QUICNetVConnection::QUICNetVConnection(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionManager &manager,
+QUICNetVConnection::QUICNetVConnection(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionTable &ctable,
                                        QUICResetTokenTable &rtable, std::shared_ptr<QUICUDPConnectionWrapper> &con)
   : _packet_factory(this->_pp_key_info), _ph_protector(this->_pp_key_info)
 {
@@ -232,9 +233,9 @@ QUICNetVConnection::QUICNetVConnection(QUICConnectionId peer_cid, QUICConnection
   this->_udp2_con                    = con;
   this->_peer_quic_connection_id     = peer_cid;
   this->_original_quic_connection_id = original_cid;
-  this->_cid_manager                 = &manager;
   this->_rtable                      = &rtable;
-  this->_quic_connection_id          = manager.generate_id();
+  this->_ctable                      = &ctable;
+  this->_quic_connection_id.randomize();
 
   this->_update_cids();
   con->bind(this);
@@ -246,7 +247,7 @@ QUICNetVConnection::QUICNetVConnection(QUICConnectionId peer_cid, QUICConnection
 
 // Initialize QUICNetVC for in coming connection (NET_VCONNECTION_IN)
 QUICNetVConnection::QUICNetVConnection(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
-                                       QUICConnectionManager &manager, QUICResetTokenTable &rtable,
+                                       QUICConnectionTable &ctable, QUICResetTokenTable &rtable,
                                        std::shared_ptr<QUICUDPConnectionWrapper> &con)
   : _packet_factory(this->_pp_key_info), _ph_protector(this->_pp_key_info)
 {
@@ -255,9 +256,9 @@ QUICNetVConnection::QUICNetVConnection(QUICConnectionId peer_cid, QUICConnection
   this->_peer_quic_connection_id     = peer_cid;
   this->_original_quic_connection_id = original_cid;
   this->_first_quic_connection_id    = first_cid;
-  this->_cid_manager                 = &manager;
   this->_rtable                      = &rtable;
-  this->_quic_connection_id          = manager.generate_id();
+  this->_ctable                      = &ctable;
+  this->_quic_connection_id.randomize();
 
   this->_update_cids();
   con->bind(this);
@@ -535,8 +536,8 @@ QUICNetVConnection::free(EThread *t)
     super::clear();
   */
   ALPNSupport::clear();
-  this->_cid_manager->remove_route(this->_original_quic_connection_id);
-  this->_cid_manager->remove_route(this->_quic_connection_id);
+  this->_ctable->erase(this->_original_quic_connection_id, this);
+  this->_ctable->erase(this->_quic_connection_id, this);
   delete this;
   // this->_packet_handler->close_connection(this);
 }
@@ -1206,7 +1207,7 @@ QUICNetVConnection::_state_handshake_process_initial_packet(const QUICInitialPac
 
     if (!this->_alt_con_manager) {
       this->_alt_con_manager =
-        new QUICAltConnectionManager(this, *this->_cid_manager, *this->_rtable, this->_peer_quic_connection_id,
+        new QUICAltConnectionManager(this, *this->_ctable, *this->_rtable, this->_peer_quic_connection_id,
                                      this->_quic_config->instance_id(), this->_quic_config->active_cid_limit_in(),
                                      this->_quic_config->preferred_address_ipv4(), this->_quic_config->preferred_address_ipv6());
       this->_frame_generators.add_generator(*this->_alt_con_manager, QUICFrameGeneratorWeight::EARLY);
@@ -1229,7 +1230,7 @@ QUICNetVConnection::_state_handshake_process_initial_packet(const QUICInitialPac
   } else {
     if (!this->_alt_con_manager) {
       this->_alt_con_manager =
-        new QUICAltConnectionManager(this, *this->_cid_manager, *this->_rtable, this->_peer_quic_connection_id,
+        new QUICAltConnectionManager(this, *this->_ctable, *this->_rtable, this->_peer_quic_connection_id,
                                      this->_quic_config->instance_id(), this->_quic_config->active_cid_limit_out());
       this->_frame_generators.add_generator(*this->_alt_con_manager, QUICFrameGeneratorWeight::BEFORE_DATA);
       this->_frame_dispatcher->add_handler(this->_alt_con_manager);

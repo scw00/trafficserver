@@ -4,35 +4,15 @@
 #include "UDPPacket.h"
 #include "UDPConnection.h"
 #include "quic/QUICTypes.h"
-#include "quic/QUICConnectionManager.h"
 #include "QUICResetTokenTable.h"
 
 class QUICNetVConnection;
 class UDP2ConnectionImpl;
 
-class QUICUDPConnectionWrapper : public std::enable_shared_from_this<QUICUDPConnectionWrapper>
-{
-public:
-  QUICUDPConnectionWrapper(UDP2ConnectionImpl &udp_con) : _udp_con(udp_con) {}
-  ~QUICUDPConnectionWrapper();
-
-  void bind(QUICNetVConnection *qvc);
-  void close(QUICNetVConnection *qvc);
-  void send(UDP2PacketUPtr, bool flush = true);
-  void signal(int event);
-  IpEndpoint from() const;
-  IpEndpoint to() const;
-
-private:
-  std::unordered_map<void *, QUICNetVConnection *> _bond_connections;
-
-  UDP2ConnectionImpl &_udp_con;
-};
-
 class QUICPacketAcceptor : public Continuation
 {
 public:
-  QUICPacketAcceptor(EThread *t, int id);
+  QUICPacketAcceptor(QUICConnectionTable &ctable, EThread *t, int id);
   // recv packet from other threads.
   void dispatch(UDP2PacketUPtr p);
   int mainEvent(int event, void *data);
@@ -55,7 +35,8 @@ private:
 
   ASLL(UDP2Packet, link) _external_recv_list;
 
-  QUICConnectionManager _cid_manager;
-  QUICResetTokenTable _rtable;
   EThread *_thread = nullptr;
+
+  QUICResetTokenTable _rtable;
+  QUICConnectionTable &_ctable;
 };

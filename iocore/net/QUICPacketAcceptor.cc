@@ -5,6 +5,7 @@
 #include "P_QUICNetVConnection.h"
 #include "P_QUICNetProcessor.h"
 #include "QUICMultiCertConfigLoader.h"
+#include "QUICUDPConnectionWrapper.h"
 #include "QUICTLS.h"
 
 static constexpr char debug_tag[] = "quic_acceptor";
@@ -14,60 +15,11 @@ static constexpr char debug_tag[] = "quic_acceptor";
 
 #define QUICDebug(fmt, ...) Debug(debug_tag, fmt, ##__VA_ARGS__)
 
-QUICUDPConnectionWrapper::~QUICUDPConnectionWrapper()
-{
-  this->_udp_con.close();
-  if (is_debug_tag_set("quic_conw")) {
-    char buff[INET6_ADDRPORTSTRLEN * 2] = {0};
-    auto from                           = this->_udp_con.from();
-    auto to                             = this->_udp_con.to();
-    Debug("quic_conw", "close udp connection %s -> %s", ats_ip_nptop(&from.sa, buff, sizeof(buff) - INET6_ADDRPORTSTRLEN),
-          ats_ip_nptop(&to.sa, buff + INET6_ADDRPORTSTRLEN, sizeof(buff) - INET6_ADDRPORTSTRLEN));
-  }
-}
-
-void
-QUICUDPConnectionWrapper::bind(QUICNetVConnection *qvc)
-{
-  this->_bond_connections.emplace(qvc, qvc);
-}
-
-void
-QUICUDPConnectionWrapper::close(QUICNetVConnection *qvc)
-{
-  this->_bond_connections.erase(qvc);
-}
-
-void
-QUICUDPConnectionWrapper::send(UDP2PacketUPtr packet, bool flush)
-{
-  this->_udp_con.send(std::move(packet), flush);
-}
-
-void
-QUICUDPConnectionWrapper::signal(int event)
-{
-  for (auto it : this->_bond_connections) {
-    it.second->handleEvent(event, this);
-  }
-}
-
-IpEndpoint
-QUICUDPConnectionWrapper::from() const
-{
-  return this->_udp_con.from();
-}
-
-IpEndpoint
-QUICUDPConnectionWrapper::to() const
-{
-  return this->_udp_con.to();
-}
-
 //
 // QUICPacketAcceptor
 //
-QUICPacketAcceptor::QUICPacketAcceptor(EThread *t, int id) : Continuation(t->mutex), _cid_manager(id), _thread(t)
+QUICPacketAcceptor::QUICPacketAcceptor(QUICConnectionTable &ctable, EThread *t, int id)
+  : Continuation(t->mutex), _thread(t), _ctable(ctable)
 {
   t->schedule_every(this, -100);
   SET_HANDLER(&QUICPacketAcceptor::mainEvent);
@@ -89,8 +41,8 @@ QUICPacketAcceptor::connectUp(Continuation *c, sockaddr const *addr, const NetVC
   ink_release_assert(udp_con != nullptr);
   auto udpw = std::make_shared<QUICUDPConnectionWrapper>(*udp_con);
 
-  auto cid = this->_cid_manager.generate_id();
-  auto qvc = new QUICNetVConnection(cid, cid, this->_cid_manager, this->_rtable, udpw);
+  QUICConnectionId cid;
+  auto qvc = new QUICNetVConnection(cid, cid, this->_ctable, this->_rtable, udpw);
   // Connection ID will be changed
   qvc->id = net_next_connection_number();
   qvc->set_context(NET_VCONNECTION_OUT);
@@ -100,7 +52,7 @@ QUICPacketAcceptor::connectUp(Continuation *c, sockaddr const *addr, const NetVC
   qvc->action_     = c;
   qvc->ep.syscall  = false;
 
-  this->_cid_manager.add_route(qvc->connection_id(), qvc);
+  this->_ctable.insert(qvc->connection_id(), qvc);
 
   MUTEX_TRY_LOCK(lock, qvc->mutex, this_ethread());
   MUTEX_TRY_LOCK(lock2, get_NetHandler(this_ethread())->mutex, this_ethread());
@@ -175,7 +127,7 @@ QUICPacketAcceptor::_process_recv_udp_packet(UDP2PacketUPtr p, UDP2ConnectionImp
   QUICLongHeaderPacketR::type(type, buf, buf_len);
 
   QUICNetVConnection *vc = nullptr;
-  auto qc                = this->_cid_manager.get_route(dcid);
+  auto qc                = this->_ctable.lookup(dcid);
   if (qc != nullptr) {
     vc = static_cast<QUICNetVConnection *>(qc);
   }
@@ -327,7 +279,7 @@ QUICPacketAcceptor::_send_invalid_token_error(const uint8_t *initial_packet, uin
   tls.initialize_key_materials(dcid_in_initial);
 
   // Create INITIAL packet
-  QUICConnectionId scid = this->_cid_manager.generate_id();
+  QUICConnectionId scid;
   uint8_t packet_buf[QUICPacket::MAX_INSTANCE_SIZE];
   QUICPacketUPtr cc_packet = pf.create_initial_packet(packet_buf, scid_in_initial, scid, 0, block, block_len, 0, 0, 1);
 
@@ -363,7 +315,7 @@ QUICPacketAcceptor::_create_qvc(QUICConnectionId peer_cid, QUICConnectionId orig
     udp_con->set_data(udpw.get());
   }
 
-  auto vc         = new QUICNetVConnection(peer_cid, original_cid, first_cid, this->_cid_manager, this->_rtable, udpw);
+  auto vc         = new QUICNetVConnection(peer_cid, original_cid, first_cid, this->_ctable, this->_rtable, udpw);
   vc->ep.syscall  = false;
   vc->id          = net_next_connection_number();
   vc->submit_time = Thread::get_hrtime();
@@ -374,8 +326,8 @@ QUICPacketAcceptor::_create_qvc(QUICConnectionId peer_cid, QUICConnectionId orig
   vc->set_context(NET_VCONNECTION_IN);
   vc->con.move(c);
 
-  this->_cid_manager.add_route(vc->connection_id(), vc);
-  this->_cid_manager.add_route(original_cid, vc);
+  this->_ctable.insert(vc->connection_id(), vc);
+  this->_ctable.insert(original_cid, vc);
   Debug("quic_acceptor", "can not find qvc, create new one %lx %lx", vc->connection_id().hash(), original_cid.hash());
 
   return vc;

@@ -74,11 +74,6 @@ QUICNetProcessor::start(int, size_t stacksize)
 NetAccept *
 QUICNetProcessor::createNetAccept(const NetProcessor::AcceptOptions &opt)
 {
-  if (this->_ctable == nullptr) {
-    QUICConfig::scoped_config params;
-    this->_ctable = new QUICConnectionTable(params->connection_table_size());
-    this->_rtable = new QUICResetTokenTable();
-  }
   return (NetAccept *)new QUICPacketHandlerIn(opt, *this->_ctable, *this->_rtable);
 }
 
@@ -117,6 +112,12 @@ QUICNetProcessor::main_accept(Continuation *cont, SOCKET fd, AcceptOptions const
   if (this->_action = nullptr) {
     this->_action  = new NetAcceptAction();
     *this->_action = cont;
+  }
+
+  if (this->_ctable == nullptr) {
+    QUICConfig::scoped_config params;
+    this->_ctable = new QUICConnectionTable(params->connection_table_size());
+    this->_rtable = new QUICResetTokenTable();
   }
 
   ProxyMutex *mutex  = this_ethread()->mutex.get();
@@ -197,9 +198,16 @@ QUICNetProcessor::create_acceptor(EThread *t)
 {
   static Ptr<ProxyMutex> mutex = Ptr<ProxyMutex>(new_ProxyMutex());
   ink_release_assert(t == this_ethread());
+  // ink_release_assert(this->_ctable != nullptr);
   SCOPED_MUTEX_LOCK(lock, mutex, t);
+  if (this->_ctable == nullptr) {
+    QUICConfig::scoped_config params;
+    this->_ctable = new QUICConnectionTable(params->connection_table_size());
+    this->_rtable = new QUICResetTokenTable();
+  }
+
   this->_acceptors.push_back(
-    std::make_unique<QUICPacketAcceptor>(t, this->_acceptors.size() == 0 ? 0 : this->_acceptors.size() - 1));
+    std::make_unique<QUICPacketAcceptor>(*this->_ctable, t, this->_acceptors.size() == 0 ? 0 : this->_acceptors.size() - 1));
   return this->_acceptors.back().get();
 }
 
