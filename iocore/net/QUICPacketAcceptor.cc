@@ -19,7 +19,7 @@ static constexpr char debug_tag[] = "quic_acceptor";
 // QUICPacketAcceptor
 //
 QUICPacketAcceptor::QUICPacketAcceptor(QUICConnectionTable &ctable, EThread *t, int id)
-  : Continuation(t->mutex), _thread(t), _ctable(ctable)
+  : Continuation(t->mutex), _thread(t), _ctable(ctable), _udp_con_factory(*this)
 {
   t->schedule_every(this, -100);
   SET_HANDLER(&QUICPacketAcceptor::mainEvent);
@@ -37,12 +37,8 @@ QUICPacketAcceptor::connectUp(Continuation *c, sockaddr const *addr, const NetVC
     local.assign(opt.local_ip, htons(opt.local_port));
   }
 
-  auto udp_con = this->create_udp_connection(local, {});
-  ink_release_assert(udp_con != nullptr);
-  auto udpw = std::make_shared<QUICUDPConnectionWrapper>(*udp_con);
-
   QUICConnectionId cid;
-  auto qvc = new QUICNetVConnection(cid, cid, this->_ctable, this->_rtable, udpw);
+  auto qvc = new QUICNetVConnection(cid, cid, local, {}, this->_ctable, this->_rtable, this->_udp_con_factory);
   // Connection ID will be changed
   qvc->id = net_next_connection_number();
   qvc->set_context(NET_VCONNECTION_OUT);
@@ -172,7 +168,7 @@ QUICPacketAcceptor::_process_recv_udp_packet(UDP2PacketUPtr p, UDP2ConnectionImp
     QUICConnectionId original_cid = dcid;
     QUICConnectionId peer_cid     = scid;
 
-    vc = this->_create_qvc(peer_cid, original_cid, cid_in_retry_token, p->to, p->from, udp_con);
+    vc = this->_create_qvc(peer_cid, original_cid, cid_in_retry_token, p->to, p->from);
   }
 
   vc->handle_received_packet(std::move(p));
@@ -300,22 +296,13 @@ QUICPacketAcceptor::_send_quic_packet(QUICPacketUPtr p, const IpEndpoint &from, 
 
 QUICNetVConnection *
 QUICPacketAcceptor::_create_qvc(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
-                                const IpEndpoint &from, const IpEndpoint &to, UDP2ConnectionImpl *udp_con)
+                                const IpEndpoint &from, const IpEndpoint &to)
 {
   Connection c;
   c.setRemote(&from.sa);
 
-  std::shared_ptr<QUICUDPConnectionWrapper> udpw;
-  if (udp_con != nullptr) {
-    auto udp_tmp = static_cast<QUICUDPConnectionWrapper *>(udp_con->get_data());
-    udpw         = udp_tmp->shared_from_this();
-  } else {
-    udp_con = this->create_udp_connection(from, to);
-    udpw    = std::make_shared<QUICUDPConnectionWrapper>(*udp_con);
-    udp_con->set_data(udpw.get());
-  }
-
-  auto vc         = new QUICNetVConnection(peer_cid, original_cid, first_cid, this->_ctable, this->_rtable, udpw);
+  auto vc =
+    new QUICNetVConnection(peer_cid, original_cid, first_cid, from, to, this->_ctable, this->_rtable, this->_udp_con_factory);
   vc->ep.syscall  = false;
   vc->id          = net_next_connection_number();
   vc->submit_time = Thread::get_hrtime();
@@ -331,22 +318,6 @@ QUICPacketAcceptor::_create_qvc(QUICConnectionId peer_cid, QUICConnectionId orig
   Debug("quic_acceptor", "can not find qvc, create new one %lx %lx", vc->connection_id().hash(), original_cid.hash());
 
   return vc;
-}
-
-UDP2ConnectionImpl *
-QUICPacketAcceptor::create_udp_connection(const IpEndpoint &from, const IpEndpoint &to)
-{
-  auto con = new UDP2ConnectionImpl(this, this->_thread);
-  // TODO reuse socket
-  ink_release_assert(con->create_socket(AF_INET) >= 0);
-  if (from.isValid()) {
-    ink_release_assert(con->bind(&from.sa) >= 0);
-  }
-  if (to.isValid()) {
-    ink_release_assert(con->connect(&to.sa) >= 0);
-  }
-  ink_release_assert(con->start_io() >= 0);
-  return con;
 }
 
 void

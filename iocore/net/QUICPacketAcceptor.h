@@ -5,9 +5,9 @@
 #include "UDPConnection.h"
 #include "quic/QUICTypes.h"
 #include "QUICResetTokenTable.h"
+#include "QUICUDPConnectionWrapper.h"
 
 class QUICNetVConnection;
-class UDP2ConnectionImpl;
 
 class QUICPacketAcceptor : public Continuation
 {
@@ -17,7 +17,6 @@ public:
   void dispatch(UDP2PacketUPtr p);
   int mainEvent(int event, void *data);
 
-  UDP2ConnectionImpl *create_udp_connection(const IpEndpoint &from, const IpEndpoint &to);
   Action *connectUp(Continuation *c, sockaddr const *addr, const NetVCOptions &opt);
 
 private:
@@ -26,7 +25,7 @@ private:
                             const QUICConnectionId &dcid, const QUICConnectionId &scid, QUICConnectionId &cid_in_retry_token);
   void _send_quic_packet(QUICPacketUPtr p, const IpEndpoint &from, const IpEndpoint &to);
   QUICNetVConnection *_create_qvc(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
-                                  const IpEndpoint &from, const IpEndpoint &to, UDP2ConnectionImpl *udp_con = nullptr);
+                                  const IpEndpoint &from, const IpEndpoint &to);
   void _send_invalid_token_error(const uint8_t *initial_packet, uint64_t initial_packet_len, const IpEndpoint &from,
                                  const IpEndpoint &to);
   bool _send_stateless_reset(QUICConnectionId dcid, uint32_t instance_id, const IpEndpoint &from, const IpEndpoint &to,
@@ -39,4 +38,5 @@ private:
 
   QUICResetTokenTable _rtable;
   QUICConnectionTable &_ctable;
+  QUICUDPConnectionFactory _udp_con_factory;
 };

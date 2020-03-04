@@ -4,7 +4,9 @@
 
 #include "QUICTypes.h"
 #include "UDPConnection.h"
-#include "P_QUICNetVConnection.h"
+// #include "P_QUICNetVConnection.h"
+class QUICNetVConnection;
+class UDP2ConnectionImpl;
 
 class QUICUDPConnectionWrapper : public std::enable_shared_from_this<QUICUDPConnectionWrapper>
 {
@@ -22,4 +24,17 @@ public:
 private:
   std::map<void *, QUICNetVConnection *> _bond_connections;
   UDP2ConnectionImpl &_udp_con;
+};
+
+using QUICUDPConnectionWrapperSPtr = std::shared_ptr<QUICUDPConnectionWrapper>;
+
+class QUICUDPConnectionFactory
+{
+public:
+  QUICUDPConnectionFactory(Continuation &acceptor) : _acceptor(acceptor) {}
+
+  QUICUDPConnectionWrapperSPtr create_udp_connection(const IpEndpoint &from, const IpEndpoint &to, EThread *thread);
+
+private:
+  Continuation &_acceptor;
 };

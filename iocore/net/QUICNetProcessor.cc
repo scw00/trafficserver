@@ -29,6 +29,7 @@
 #include "QUICConfig.h"
 #include "QUICMultiCertConfigLoader.h"
 #include "QUICResetTokenTable.h"
+#include "QUICPacketAcceptor.h"
 
 //
 // Global Data

@@ -225,12 +225,13 @@ private:
 QUICNetVConnection::QUICNetVConnection() : _packet_factory(this->_pp_key_info), _ph_protector(this->_pp_key_info) {}
 
 // Initialize QUICNetVC for out going connection (NET_VCONNECTION_OUT)
-QUICNetVConnection::QUICNetVConnection(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionTable &ctable,
-                                       QUICResetTokenTable &rtable, std::shared_ptr<QUICUDPConnectionWrapper> &con)
-  : _packet_factory(this->_pp_key_info), _ph_protector(this->_pp_key_info)
+QUICNetVConnection::QUICNetVConnection(QUICConnectionId peer_cid, QUICConnectionId original_cid, const IpEndpoint &from,
+                                       const IpEndpoint &to, QUICConnectionTable &ctable, QUICResetTokenTable &rtable,
+                                       QUICUDPConnectionFactory &udp_factory)
+  : _packet_factory(this->_pp_key_info), _ph_protector(this->_pp_key_info), _udp_con_factory(&udp_factory)
 {
   SET_HANDLER((NetVConnHandler)&QUICNetVConnection::startEvent);
-  this->_udp2_con                    = con;
+  this->_udp2_con                    = this->_udp_con_factory->create_udp_connection(from, to, this_ethread());
   this->_peer_quic_connection_id     = peer_cid;
   this->_original_quic_connection_id = original_cid;
   this->_rtable                      = &rtable;
@@ -238,7 +239,7 @@ QUICNetVConnection::QUICNetVConnection(QUICConnectionId peer_cid, QUICConnection
   this->_quic_connection_id.randomize();
 
   this->_update_cids();
-  con->bind(this);
+  this->_udp2_con->bind(this);
 
   if (is_debug_tag_set(QUIC_DEBUG_TAG.data())) {
     QUICConDebug("dcid=%s scid=%s", this->_peer_quic_connection_id.hex().c_str(), this->_quic_connection_id.hex().c_str());
@@ -247,12 +248,12 @@ QUICNetVConnection::QUICNetVConnection(QUICConnectionId peer_cid, QUICConnection
 
 // Initialize QUICNetVC for in coming connection (NET_VCONNECTION_IN)
 QUICNetVConnection::QUICNetVConnection(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
-                                       QUICConnectionTable &ctable, QUICResetTokenTable &rtable,
-                                       std::shared_ptr<QUICUDPConnectionWrapper> &con)
-  : _packet_factory(this->_pp_key_info), _ph_protector(this->_pp_key_info)
+                                       const IpEndpoint &from, const IpEndpoint &to, QUICConnectionTable &ctable,
+                                       QUICResetTokenTable &rtable, QUICUDPConnectionFactory &udp_factory)
+  : _packet_factory(this->_pp_key_info), _ph_protector(this->_pp_key_info), _udp_con_factory(&udp_factory)
 {
   SET_HANDLER((NetVConnHandler)&QUICNetVConnection::acceptEvent);
-  this->_udp2_con                    = con;
+  this->_udp2_con                    = this->_udp_con_factory->create_udp_connection(from, to, this_ethread());
   this->_peer_quic_connection_id     = peer_cid;
   this->_original_quic_connection_id = original_cid;
   this->_first_quic_connection_id    = first_cid;
@@ -261,7 +262,7 @@ QUICNetVConnection::QUICNetVConnection(QUICConnectionId peer_cid, QUICConnection
   this->_quic_connection_id.randomize();
 
   this->_update_cids();
-  con->bind(this);
+  this->_udp2_con->bind(this);
 
   if (is_debug_tag_set(QUIC_DEBUG_TAG.data())) {
     QUICConDebug("dcid=%s scid=%s", this->_peer_quic_connection_id.hex().c_str(), this->_quic_connection_id.hex().c_str());
@@ -2305,7 +2306,7 @@ QUICNetVConnection::_state_connection_established_migrate_connection(const QUICP
       con.setRemote(&(p.from().sa));
       this->con.move(con);
       this->set_remote_addr();
-      this->_udp_con = p.udp_con();
+      this->_udp2_con = this->_udp_con_factory->create_udp_connection(p.to(), p.from(), this_ethread());
 
       QUICPath new_path = {p.to(), p.from()};
       this->_validate_new_path(new_path);
@@ -2322,7 +2323,7 @@ QUICNetVConnection::_state_connection_established_migrate_connection(const QUICP
         con.setRemote(&(p.from().sa));
         this->con.move(con);
         this->set_remote_addr();
-        this->_udp_con = p.udp_con();
+        this->_udp2_con = this->_udp_con_factory->create_udp_connection(this->local_addr, con.addr, this_ethread());
 
         this->_update_peer_cid(this->_alt_con_manager->migrate_to_alt_cid());
 

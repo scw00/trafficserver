@@ -1,4 +1,6 @@
+#include "P_QUICNetVConnection.h"
 #include "QUICUDPConnectionWrapper.h"
+#include "UDPConnection.h"
 
 //
 // QUICUDPConnectionWrapper
@@ -51,4 +53,23 @@ IpEndpoint
 QUICUDPConnectionWrapper::to() const
 {
   return this->_udp_con.to();
+}
+
+//
+// QUICUDPConnectionFactory
+//
+QUICUDPConnectionWrapperSPtr
+QUICUDPConnectionFactory::create_udp_connection(const IpEndpoint &from, const IpEndpoint &to, EThread *thread)
+{
+  auto con = new UDP2ConnectionImpl(&this->_acceptor, thread);
+  // TODO reuse socket
+  ink_release_assert(con->create_socket(AF_INET) >= 0);
+  if (from.isValid()) {
+    ink_release_assert(con->bind(&from.sa) >= 0);
+  }
+  if (to.isValid()) {
+    ink_release_assert(con->connect(&to.sa) >= 0);
+  }
+  ink_release_assert(con->start_io() >= 0);
+  return std::make_unique<QUICUDPConnectionWrapper>(*con);
 }

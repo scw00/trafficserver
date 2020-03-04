@@ -44,12 +44,12 @@
 #include "quic/QUICConnectionTable.h"
 
 #include "QUICPacketDispatcher.h"
-#include "QUICPacketAcceptor.h"
 
 class UnixNetVConnection;
 class QUICResetTokenTable;
 struct NetAccept;
 class QUICPacketDispatcher;
+class QUICPacketAcceptor;
 
 //////////////////////////////////////////////////////////////////
 //

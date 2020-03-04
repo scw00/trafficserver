@@ -87,6 +87,7 @@ class QUICHandshake;
 class QUICPacketAcceptor;
 class QUICAltConnectionManager;
 class QUICUDPConnectionWrapper;
+class QUICUDPConnectionFactory;
 
 class SSLNextProtocolSet;
 
@@ -143,10 +144,11 @@ class QUICNetVConnection : public UnixNetVConnection, public QUICConnection, pub
   using super = UnixNetVConnection; ///< Parent type.
 
 public:
-  QUICNetVConnection(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid,
-                     QUICConnectionTable &cid_manager, QUICResetTokenTable &rtable, std::shared_ptr<QUICUDPConnectionWrapper> &);
-  QUICNetVConnection(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionTable &, QUICResetTokenTable &rtable,
-                     std::shared_ptr<QUICUDPConnectionWrapper> &);
+  QUICNetVConnection(QUICConnectionId peer_cid, QUICConnectionId original_cid, QUICConnectionId first_cid, const IpEndpoint &from,
+                     const IpEndpoint &to, QUICConnectionTable &cid_manager, QUICResetTokenTable &rtable,
+                     QUICUDPConnectionFactory &);
+  QUICNetVConnection(QUICConnectionId peer_cid, QUICConnectionId original_cid, const IpEndpoint &from, const IpEndpoint &to,
+                     QUICConnectionTable &, QUICResetTokenTable &rtable, QUICUDPConnectionFactory &);
   QUICNetVConnection();
 
   ~QUICNetVConnection();
@@ -375,6 +377,7 @@ private:
 
   std::unique_ptr<QUICContextImpl> _context;
 
+  QUICUDPConnectionFactory *_udp_con_factory = nullptr;
   std::shared_ptr<QUICUDPConnectionWrapper> _udp2_con;
 };
 
