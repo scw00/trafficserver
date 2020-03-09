@@ -71,6 +71,7 @@ public:
   virtual NetAccept *createNetAccept(const NetProcessor::AcceptOptions &opt) override;
   virtual NetVConnection *allocate_vc(EThread *t) override;
   virtual QUICPacketAcceptor *create_acceptor(EThread *t);
+  QUICPacketAcceptor *get_acceptor(EThread *t);
 
   void send(UDP2PacketUPtr p);
   void send(QUICPacketUPtr p, const IpEndpoint &to);
@@ -91,8 +92,11 @@ private:
   QUICResetTokenTable *_rtable = nullptr;
   QUICConnectionTable *_ctable = nullptr;
 
+  // port dispatcher map
   std::unordered_map<uint64_t, std::unique_ptr<QUICPacketDispatcher>> _dispatchers;
-  std::vector<std::unique_ptr<QUICPacketAcceptor>> _acceptors;
+  // TODO Find a smarter way, Read only map, should not be changed while running
+  std::unordered_map<EThread *, std::shared_ptr<QUICPacketAcceptor>> _acceptor_route_map;
+  std::vector<std::shared_ptr<QUICPacketAcceptor>> _acceptors;
 };
 
 extern QUICNetProcessor quic_NetProcessor;

@@ -123,7 +123,8 @@ QUICPacketAcceptor::_process_recv_udp_packet(UDP2PacketUPtr p, UDP2ConnectionImp
   QUICLongHeaderPacketR::type(type, buf, buf_len);
 
   QUICNetVConnection *vc = nullptr;
-  auto qc                = this->_ctable.lookup(dcid);
+  // FIXME: use local map ?
+  auto qc = this->_ctable.lookup(dcid);
   if (qc != nullptr) {
     vc = static_cast<QUICNetVConnection *>(qc);
   }

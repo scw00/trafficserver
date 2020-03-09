@@ -236,6 +236,7 @@ QUICNetVConnection::QUICNetVConnection(QUICConnectionId peer_cid, QUICConnection
   this->_original_quic_connection_id = original_cid;
   this->_rtable                      = &rtable;
   this->_ctable                      = &ctable;
+  this->thread                       = this_ethread();
   this->_quic_connection_id.randomize();
 
   this->_update_cids();
@@ -259,6 +260,7 @@ QUICNetVConnection::QUICNetVConnection(QUICConnectionId peer_cid, QUICConnection
   this->_first_quic_connection_id    = first_cid;
   this->_rtable                      = &rtable;
   this->_ctable                      = &ctable;
+  this->thread                       = this_ethread();
   this->_quic_connection_id.randomize();
 
   this->_update_cids();
@@ -2391,4 +2393,10 @@ void
 QUICNetVConnection::handle_received_packet(UDP2PacketUPtr p)
 {
   this->_packet_recv_queue.enqueue(std::move(p));
+}
+
+EThread *
+QUICNetVConnection::get_thread()
+{
+  return this->thread;
 }

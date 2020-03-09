@@ -58,4 +58,5 @@ public:
   virtual void reset_quic_connection()                              = 0;
   virtual void handle_received_packet(UDPPacket *packeet)           = 0;
   virtual void ping()                                               = 0;
+  virtual EThread *get_thread()                                     = 0;
 };

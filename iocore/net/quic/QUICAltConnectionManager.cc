@@ -75,6 +75,9 @@ QUICAltConnectionManager::~QUICAltConnectionManager()
     if (this->_alt_quic_connection_ids_local[i].id.length() != 0 &&
         this->_alt_quic_connection_ids_local[i].id != QUICConnectionId::ZERO()) {
       this->_ctable.erase(this->_alt_quic_connection_ids_local[i].id, this->_qc);
+      if (is_debug_tag_set(V_DEBUG_TAG)) {
+        QUICACMVDebug("free cid=%s", this->_alt_quic_connection_ids_local[i].id.hex().c_str());
+      }
     }
   }
   delete this->_local_preferred_address;

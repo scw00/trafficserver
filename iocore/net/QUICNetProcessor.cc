@@ -190,8 +190,25 @@ QUICNetProcessor::send(QUICPacketUPtr p, const IpEndpoint &to)
 void
 QUICNetProcessor::dispatch(UDP2PacketUPtr p, QUICConnectionId dcid)
 {
-  uint64_t hash = dcid.hash();
-  this->_acceptors[hash % this->_acceptors.size()]->dispatch(std::move(p));
+  const uint8_t *buf = reinterpret_cast<uint8_t *>(p->chain->start());
+
+  if (!QUICInvariants::is_long_header(buf)) {
+    // short header and migration happen
+    auto qc = this->_ctable->lookup(dcid);
+    if (qc != nullptr) {
+      auto it = this->_acceptor_route_map.find(qc->get_thread());
+      ink_release_assert(it != this->_acceptor_route_map.end());
+      it->second->dispatch(std::move(p));
+    } else {
+      // can not find corresponding qc discard
+      Debug("quic_processor", "dispatch failed. unknown dcid [%s] discard", dcid.hex().c_str());
+    }
+    return;
+  }
+
+  ink_release_assert(QUICInvariants::is_long_header(buf));
+  this->_acceptors[dcid.hash() % this->_acceptors.size()]->dispatch(std::move(p));
+  return;
 }
 
 QUICPacketAcceptor *
@@ -207,8 +224,10 @@ QUICNetProcessor::create_acceptor(EThread *t)
     this->_rtable = new QUICResetTokenTable();
   }
 
-  this->_acceptors.push_back(
-    std::make_unique<QUICPacketAcceptor>(*this->_ctable, t, this->_acceptors.size() == 0 ? 0 : this->_acceptors.size() - 1));
+  auto acceptor =
+    std::make_shared<QUICPacketAcceptor>(*this->_ctable, t, this->_acceptors.size() == 0 ? 0 : this->_acceptors.size() - 1);
+  this->_acceptor_route_map.insert({t, acceptor});
+  this->_acceptors.push_back(acceptor);
   return this->_acceptors.back().get();
 }
 
@@ -216,6 +235,17 @@ Continuation *
 QUICNetProcessor::get_action() const
 {
   return this->_action->continuation;
+}
+
+QUICPacketAcceptor *
+QUICNetProcessor::get_acceptor(EThread *t)
+{
+  auto it = this->_acceptor_route_map.find(t);
+  if (it == this->_acceptor_route_map.end()) {
+    return nullptr;
+  }
+
+  return it->second.get();
 }
 
 void

@@ -212,6 +212,7 @@ public:
   NetVConnectionContext_t direction() const override;
   std::string_view negotiated_application_name() const override;
   bool is_closed() const override;
+  EThread *get_thread() override;
 
   // QUICConnection (QUICFrameHandler)
   std::vector<QUICFrameType> interests() override;
