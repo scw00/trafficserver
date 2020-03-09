@@ -9,13 +9,13 @@ static constexpr char debug_tag[] = "quic_dispatcher";
 #define QUICDebugDS(dcid, scid, fmt, ...) \
   Debug(debug_tag, "[%08" PRIx32 "-%08" PRIx32 "] " fmt, dcid.h32(), scid.h32(), ##__VA_ARGS__)
 
-QUICPacketDispatcher::QUICPacketDispatcher(const IpEndpoint &addr, EThread *t) : _from(addr)
+QUICPacketDispatcher::QUICPacketDispatcher(const IpEndpoint &addr, EThread *t, int fd) : _from(addr)
 {
   if (t == nullptr) {
     t = eventProcessor.assign_thread(ET_UDP2);
   }
   this->mutex = t->mutex;
-  this->_con  = new UDP2ConnectionImpl(this, t);
+  this->_con  = new UDP2ConnectionImpl(this, t, fd);
 
   SET_HANDLER(&QUICPacketDispatcher::startEvent);
   t->schedule_imm(this);

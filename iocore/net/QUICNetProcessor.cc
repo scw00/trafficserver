@@ -180,7 +180,6 @@ QUICNetProcessor::send(QUICPacketUPtr p, const IpEndpoint &to)
     Debug("quic_processor", "unknown local addresss ignore");
     return;
   }
->>>>>>> QUIC: compile success
 
   it->second->send_quic_packet(std::move(p), to);
   p.release();

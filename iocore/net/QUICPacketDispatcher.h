@@ -12,7 +12,7 @@ class UDP2ConnectionImpl;
 class QUICPacketDispatcher : public Continuation
 {
 public:
-  QUICPacketDispatcher(const IpEndpoint &addr, EThread *t = nullptr);
+  QUICPacketDispatcher(const IpEndpoint &addr, EThread *t = nullptr, int fd = -1);
 
   int startEvent(int event, void *data);
   int mainEvent(int event, void *data);
