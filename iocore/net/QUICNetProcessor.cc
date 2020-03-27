@@ -153,7 +153,7 @@ QUICNetProcessor::main_accept(Continuation *cont, SOCKET fd, AcceptOptions const
   // SCOPED_MUTEX_LOCK(lock, na->mutex, this_ethread());
   // udpNet.UDPBind((Continuation *)na, &na->server.accept_addr.sa, 1048576, 1048576);
 
-  auto dispatcher = std::make_unique<QUICPacketDispatcher>(accept_ip, fd);
+  auto dispatcher = std::make_unique<QUICPacketDispatcher>(accept_ip, nullptr, fd);
   this->_dispatchers.emplace(accept_ip.host_order_port(), std::move(dispatcher));
   return this->_action.get();
 }
